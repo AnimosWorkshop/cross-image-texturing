@@ -160,11 +160,16 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			controlnet, scheduler, safety_checker, 
 			feature_extractor, requires_safety_checker
 		)
-
+		#Denoising Diffusion Probabilistic Models.
+		#the scheduler controlling the timesteps and the amount of noise added or removed at each step of the diffusion process
 		self.scheduler = DDPMScheduler.from_config(self.scheduler.config)
+		# allow offload the model to save momory
 		self.model_cpu_offload_seq = "vae->text_encoder->unet->vae"
 		self.enable_model_cpu_offload()
+		#VAE -  change image to latent, Slicing - split image to patches
 		self.enable_vae_slicing()
+		#image processor probably in this case for tranpforming image to latent
+		#vae_scale_factor - might be used to adjust the resolution or dimensions of the images 
 		self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
 
 	
@@ -192,6 +197,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.intermediate_dir = f"{output_dir}/intermediate"
 
 		dirs = [output_dir, self.result_dir, self.intermediate_dir]
+		#validate that all target directories exist/create one if not
 		for dir_ in dirs:
 			if not os.path.isdir(dir_):
 				os.mkdir(dir_)
@@ -201,31 +207,41 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.camera_poses = []
 		self.attention_mask=[]
 		self.centers = camera_centers
-
+		#camera_azims ==> list of azimuth angles for different camera positions.
 		cam_count = len(camera_azims)
 		front_view_diff = 360
 		back_view_diff = 360
 		front_view_idx = 0
 		back_view_idx = 0
 		for i, azim in enumerate(camera_azims):
+			#conver Azim to be 0-360
 			if azim < 0:
 				azim += 360
 			self.camera_poses.append((0, azim))
+			
+			#keep neighbour cameras to ensuring smooth transitions between views
 			self.attention_mask.append([(cam_count+i-1)%cam_count, i, (i+1)%cam_count])
+			#find front and back for multiple purposes: 
+			# front: for alignment, reference in attention mechanisms, or for ensuring that the main features of the object are prominently captured.
+			#back of the object: back of the object is properly captured and can be used for tasks that require a comprehensive view of the object from all angles.
+			
+			#Find the fronview camera: closest to 0,   
 			if abs(azim) < front_view_diff:
 				front_view_idx = i
 				front_view_diff = abs(azim)
+			#Find the back view camera: closest to 180,   
 			if abs(azim - 180) < back_view_diff:
 				back_view_idx = i
 				back_view_diff = abs(azim - 180)
 
 		# Add two additional cameras for painting the top surfaces
+		# Adding top-view cameras provides better coverage of the object, especially the top surfaces, which might not be fully visible from the original horizontal camera positions.
 		if top_cameras:
-			self.camera_poses.append((30, 0))
-			self.camera_poses.append((30, 180))
+			self.camera_poses.append((30, 0)) #top of fromt
+			self.camera_poses.append((30, 180)) #top of back
 
-			self.attention_mask.append([front_view_idx, cam_count])
-			self.attention_mask.append([back_view_idx, cam_count+1])
+			self.attention_mask.append([front_view_idx, cam_count]) #neighbour of top front
+			self.attention_mask.append([back_view_idx, cam_count+1]) #neigbour of top back
 
 		# Reference view for attention (all views attend the the views in this list)
 		# A forward view will be used if not specified
@@ -233,11 +249,13 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			ref_views = [front_view_idx]
 
 		# Calculate in-group attention mask
+		#split camera to smaller group for better memory usage
 		self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
 
 
 		# Set up pytorch3D for projection between screen space and UV space
 		# uvp is for latent and uvp_rgb for rgb color
+		# Initializes a UVP object with specific rendering and texture parameters.
 		self.uvp = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
 		if mesh_path.lower().endswith(".obj"):
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
@@ -245,13 +263,19 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			self.uvp.load_glb_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
+		#Configures camera positions and render settings
 		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
 
 		self.uvp_rgb = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+		#Cloning the mesh ensures that both uvp and uvp_rgb work with the same 3D model, 
+		#   but possibly with different texture and rendering settings.
 		self.uvp_rgb.mesh = self.uvp.mesh.clone()
+		#cosine maps, which are used to calculate angles and lighting effects.
 		self.uvp_rgb.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 		_,_,_,cos_maps,_, _ = self.uvp_rgb.render_geometry()
+		#important for shading and lighting calculations, 
+		#   ensuring that the rendered textures correctly reflect light and shadows.
 		self.uvp_rgb.calculate_cos_angle_weights(cos_maps, fill=False)
 
 		# Save some VRAM
@@ -259,17 +283,23 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 		self.uvp_rgb.to("cpu")
 
-
+		#preparing color images and encoding them into latents using a Variational Autoencoder (VAE)
+		#creates a tensor of color images from predefined color constants.
 		color_images = torch.FloatTensor([color_constants[name] for name in color_names]).reshape(-1,3,1,1).to(dtype=self.text_encoder.dtype, device=self._execution_device)
+		#expands the color images to the desired latent size
 		color_images = torch.ones(
 			(1,1,latent_size*8, latent_size*8), 
 			device=self._execution_device, 
 			dtype=self.text_encoder.dtype
 		) * color_images
+		#normalizes the color images to the range [0, 1].
 		color_images = ((0.5*color_images)+0.5)
+		#normalized color images into latent representations 
 		color_latents = encode_latents(self.vae, color_images)
 
+		#stores the encoded latents in a dictionary for easy access.
 		self.color_latents = {color[0]:color[1] for color in zip(color_names, [latent for latent in color_latents])}
+		#save GPU memory by ove to CPU
 		self.vae = self.vae.to("cpu")
 
 		print("Done Initialization")
