@@ -53,7 +53,7 @@ logging_config = {
 	"view_fast_preview": opt.view_fast_preview,
 	"tex_fast_preview": opt.tex_fast_preview,
 	}
-
+#TODO: what is the differ
 if opt.cond_type == "normal":
 	controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11p_sd15_normalbae", variant="fp16", torch_dtype=torch.float16)
 elif opt.cond_type == "depth":
@@ -69,7 +69,7 @@ pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
 
-
+#TODO:how to change it to the input output we whant
 result_tex_rgb, textured_views, v = syncmvd(
 	prompt=opt.prompt,
 	height=opt.latent_view_size*8,

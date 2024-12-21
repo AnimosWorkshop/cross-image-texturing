@@ -26,7 +26,7 @@ from .voronoi import voronoi_solve
 
 # Pytorch3D based renderering functions, managed in a class
 # Render size is recommended to be the same as your latent view size
-# DO NOT USE "bilinear" sampling when you are handling latents.
+# DO NOT USE "bilinear" sampling when you are handling latents.TO DO: see if it is importent to us
 # Stable Diffusion has 4 latent channels so use channels=4
 
 class UVProjection():

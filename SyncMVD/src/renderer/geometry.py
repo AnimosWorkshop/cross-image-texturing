@@ -26,7 +26,7 @@ from pytorch3d.renderer.blending import BlendParams,hard_rgb_blend
 from pytorch3d.renderer.utils import convert_to_tensors_and_broadcast, TensorProperties
 from pytorch3d.renderer.mesh.shader import ShaderBase
 
-
+#TO-DO:where this gwomatry is used?
 def get_cos_angle(
 	points, normals, camera_position
 ):
