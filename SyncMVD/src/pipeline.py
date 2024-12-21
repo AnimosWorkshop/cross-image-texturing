@@ -171,6 +171,134 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		#image processor probably in this case for tranpforming image to latent
 		#vae_scale_factor - might be used to adjust the resolution or dimensions of the images 
 		self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
+def setup_output_dirs(self, logging_config):
+
+        output_dir = logging_config["output_dir"]
+
+        self.result_dir = f"{output_dir}/results"
+
+        self.intermediate_dir = f"{output_dir}/intermediate"
+
+        dirs = [output_dir, self.result_dir, self.intermediate_dir]
+
+        for dir_ in dirs:
+
+            if not os.path.isdir(dir_):
+
+                os.mkdir(dir_)
+
+ 
+
+    def setup_cameras(self, camera_azims, camera_centers, top_cameras, ref_views, max_batch_size):
+
+        self.camera_poses = []
+
+        self.attention_mask = []
+
+        self.centers = camera_centers
+
+        cam_count = len(camera_azims)
+
+        front_view_diff = 360
+
+        back_view_diff = 360
+
+        front_view_idx = 0
+
+        back_view_idx = 0
+
+        for i, azim in enumerate(camera_azims):
+
+            if azim < 0:
+
+                azim += 360
+
+            self.camera_poses.append((0, azim))
+
+            self.attention_mask.append([(cam_count + i - 1) % cam_count, i, (i + 1) % cam_count])
+
+            if abs(azim) < front_view_diff:
+
+                front_view_idx = i
+
+                front_view_diff = abs(azim)
+
+            if abs(azim - 180) < back_view_diff:
+
+                back_view_idx = i
+
+                back_view_diff = abs(azim - 180)
+
+        if top_cameras:
+
+            self.camera_poses.append((30, 0))
+
+            self.camera_poses.append((30, 180))
+
+            self.attention_mask.append([front_view_idx, cam_count])
+
+            self.attention_mask.append([back_view_idx, cam_count + 1])
+
+        if len(ref_views) == 0:
+
+            ref_views = [front_view_idx]
+
+        self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
+
+ 
+
+    def setup_uv_projection(self, mesh_path, mesh_transform, mesh_autouv, texture_size, latent_size, render_rgb_size, texture_rgb_size):
+
+        self.uvp = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
+
+        if mesh_path.lower().endswith(".obj"):
+
+            self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+
+        elif mesh_path.lower().endswith(".glb"):
+
+            self.uvp.load_glb_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+
+        else:
+
+            assert False, "The mesh file format is not supported. Use .obj or .glb."
+
+        self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=self.centers, camera_distance=4.0)
+
+        self.uvp_rgb = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+
+        self.uvp_rgb.mesh = self.uvp.mesh.clone()
+
+        self.uvp_rgb.set_cameras_and_render_settings(self.camera_poses, centers=self.centers, camera_distance=4.0)
+
+        _, _, _, cos_maps, _, _ = self.uvp_rgb.render_geometry()
+
+        self.uvp_rgb.calculate_cos_angle_weights(cos_maps, fill=False)
+
+        del _, cos_maps
+
+        self.uvp.to("cpu")
+
+        self.uvp_rgb.to("cpu")
+
+ 
+
+    def setup_color_latents(self, latent_size):
+
+        color_images = torch.FloatTensor([color_constants[name] for name in color_names]).reshape(-1, 3, 1, 1).to(dtype=self.text_encoder.dtype, device=self._execution_device)
+
+        color_images = torch.ones((1, 1, latent_size * 8, latent_size * 8), device=self._execution_device, dtype=self.text_encoder.dtype) * color_images
+
+        color_images = ((0.5 * color_images) + 0.5)
+
+        color_latents = encode_latents(self.vae, color_images)
+
+        self.color_latents = {color[0]: color[1] for color in zip(color_names, [latent for latent in color_latents])}
+
+        self.vae = self.vae.to("cpu")
+
+ 
+
 
 	
 	def initialize_pipeline(
@@ -381,7 +509,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			)
 
 
-		
+		# configuration of logging and preview
 		num_timesteps = self.scheduler.config.num_train_timesteps
 		initial_controlnet_conditioning_scale = controlnet_conditioning_scale
 		log_interval = logging_config.get("log_interval", 10)
@@ -398,6 +526,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
 			# mult = len(controlnet.nets) if isinstance(controlnet, MultiControlNetModel) else 1
 			mult = 1
+			#Control guidance allows for precise control over the generation process 
+			#   by using additional conditioning information. 
+			#   It helps in achieving more accurate and desired outputs, especially in complex generation tasks.
 			control_guidance_start, control_guidance_end = mult * [control_guidance_start], mult * [
 				control_guidance_end
 			]
@@ -438,20 +569,27 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# if isinstance(controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
 		# 	controlnet_conditioning_scale = [controlnet_conditioning_scale] * len(controlnet.nets)
 
+		#Global pooling conditions typically involve aggregating information across the entire input to make more informed predictions or decisions.
 		global_pool_conditions = (
 			controlnet.config.global_pool_conditions
 			if isinstance(controlnet, ControlNetModel)
 			else controlnet.nets[0].config.global_pool_conditions
 		)
+		#In guess mode, the model might attempt to generate or infer certain aspects of the output based on incomplete or ambiguous input conditions
 		guess_mode = controlnet_guess_mode or global_pool_conditions
 
 
 		# 3. Encode input prompt
+		#The negative prompt provided by the user to guide the model on what to avoid generating.
 		prompt, negative_prompt = prepare_directional_prompt(prompt, negative_prompt)
 
+		#Low-Rank Adaptation (LoRA) use for adapting large pre-trained models to new tasks 
+		#  by introducing low-rank decompositions into the model's weight matrices. 
+		#  It reduces computational costs and memory usage while retaining the model's performance,
 		text_encoder_lora_scale = (
 			cross_attention_kwargs.get("scale", None) if cross_attention_kwargs is not None else None
 		)
+		#Encoding the prompts into embedding (semantic meaning of the data)
 		prompt_embeds = self._encode_prompt(
 			prompt,
 			device,
@@ -462,7 +600,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			negative_prompt_embeds=None,
 			lora_scale=text_encoder_lora_scale,
 		)
-
+		#Divides the encoded embeddings into negative and positive prompt embeddings. and generate dictionary
 		negative_prompt_embeds, prompt_embeds = torch.chunk(prompt_embeds, 2)
 		prompt_embed_dict = dict(zip(direction_names, [emb for emb in prompt_embeds]))
 		negative_prompt_embed_dict = dict(zip(direction_names, [emb for emb in negative_prompt_embeds]))
@@ -470,7 +608,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# (4. Prepare image) This pipeline use internal conditional images from Pytorch3D
 		self.uvp.to(self._execution_device)
 		conditioning_images, masks = get_conditioning_images(self.uvp, height, cond_type=cond_type)
+		#converts the data type of the conditioning images to match the data type of the
 		conditioning_images = conditioning_images.type(prompt_embeds.dtype)
+		#normalizes the conditioning images to a range of [0, 1],
 		cond = (conditioning_images/2+0.5).permute(0,2,3,1).cpu().numpy()
 		cond = np.concatenate([img for img in cond], axis=1)
 		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
@@ -506,7 +646,10 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# 7.1 Create tensor stating which controlnets to keep
 		controlnet_keep = []
-
+		#This list comprehension calculates the keep values 
+		#   for each pair of control_guidance_start and control_guidance_end at the current timestep i
+		#    indicates whether the control should be "kept" (applied) or "ignored" (not applied)
+		#    at that particular timestep.
 		for i in range(len(timesteps)):
 			keeps = [
 				1.0 - float(i / len(timesteps) < s or (i + 1) / len(timesteps) > e)
