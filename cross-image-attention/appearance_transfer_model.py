@@ -12,8 +12,13 @@ from utils.model_utils import get_stable_diffusion_model
 from utils.segmentation import Segmentor
 
 
+"""
+Class which defines the transfer model.
+Its .pipe function is used as the main function for the transfer process.
+"""
 class AppearanceTransferModel:
 
+    # Note how .pipe is defineded to be from CrossImageAttentionDiffusionPipeline.
     def __init__(self, config: RunConfig, pipe: Optional[CrossImageAttentionStableDiffusionPipeline] = None):
         self.config = config
         self.pipe = get_stable_diffusion_model() if pipe is None else pipe

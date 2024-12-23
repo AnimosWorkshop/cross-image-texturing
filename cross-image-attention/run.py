@@ -34,6 +34,10 @@ def run(cfg: RunConfig) -> List[Image.Image]:
     return images
 
 
+"""
+This is the main function used to run the project.
+The basics are that it takes the configurations from config.yaml and runs the program.
+"""
 def run_appearance_transfer(model: AppearanceTransferModel, cfg: RunConfig) -> List[Image.Image]:
     init_latents, init_zs = latent_utils.get_init_latents_and_noises(model=model, cfg=cfg)
     model.pipe.scheduler.set_timesteps(cfg.num_timesteps)
