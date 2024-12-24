@@ -1,39 +1,20 @@
-# Cross-Image Attention for Zero-Shot Appearance Transfer (SIGGRAPH 2024)
+# Main Structure
 
-> Yuval Alaluf*, Daniel Garibi*, Or Patashnik, Hadar Averbuch-Elor, Daniel Cohen-Or  
-> Tel Aviv University  
-> \* Denotes equal contribution  
->
-> Recent advancements in text-to-image generative models have demonstrated a remarkable ability to capture a deep semantic understanding of images. In this work, we leverage this semantic knowledge to transfer the visual appearance between objects that share similar semantics but may differ significantly in shape. To achieve this, we build upon the self-attention layers of these generative models and introduce a cross-image attention mechanism that implicitly establishes semantic correspondences across images. Specifically, given a pair of images ––– one depicting the target structure and the other specifying the desired appearance ––– our cross-image attention combines the queries corresponding to the structure image with the keys and values of the appearance image. This operation, when applied during the denoising process, leverages the established semantic correspondences to generate an image combining the desired structure and appearance. In addition, to improve the output image quality, we harness three mechanisms that either manipulate the noisy latent codes or the model's internal representations throughout the denoising process. Importantly, our approach is zero-shot, requiring no optimization or training. Experiments show that our method is effective across a wide range of object categories and is robust to variations in shape, size, and viewpoint between the two input images.
+Here we represent the structure of both works for future reference.
 
-<a href="https://arxiv.org/abs/2311.03335"><img src="https://img.shields.io/badge/arXiv-2311.03335-b31b1b.svg" height=22.5></a>
-<a href="https://garibida.github.io/cross-image-attention/"><img src="https://img.shields.io/static/v1?label=Project&message=Page&color=red" height=20.5></a>
-[![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/yuvalalaluf/cross-image-attention)
+### General Concepts
 
-<p align="center">
-<img src="docs/teaser.jpg" width="90%"/>  
-<br>
-Given two images depicting a source structure and a target appearance, our method generates an image merging the structure of one image with the appearance of the other in a zero-shot manner.
-</p>
+* When running classifier free guidance (CFG), it's customary to duplicate the date in the form of `torch.cat([latents] * 2)` so that one copy is "guided" and the other isn't.
 
+---
+- - -
 
-## Description  
-Official implementation of our Cross-Image Attention and Appearance Transfer paper.
+## Cross Image Attention
 
+### run.py
 
-## Environment
-Our code builds on the requirement of the `diffusers` library. To set up their environment, please run:
-```
-conda env create -f environment/environment.yaml
-conda activate cross_image
-```
-
-## Usage  
-<p align="center">
-<img src="docs/general_results.jpg" width="90%"/>  
-<br>
-Sample appearance transfer results obtained by our cross-image attention technique.
-</p>
+File used to actually run the project. Takes configurations from a config.yaml file.
+THe running instructions are specified in the usage section of the readme file:
 
 To generate an image, you can simply run the `run.py` script. For example,
 ```
@@ -55,153 +36,49 @@ Notes:
 - You can set `--load_latents` to `True` to load the latents from a file instead of inverting the input images every time. 
   - This is useful if you want to generate multiple images with the same structure but different appearances.
 
+Most interestingly, `run.py` calls the `model.pipe(...)` function, so we will talk about the file which defines it next.
+Some of the important pipe parameters are:
+* `guidance_scale=1.0` - implies no CFG
+* `callback=model.get_adain_callback()` - sets use of the AdaIN module
+* `swap_guidance_scale=3.5` (from config file) - sets the strength of the "specialized" CFG
+---
+### appearance_transfer_model.py
 
-### Demo Notebook 
-<p align="center">
-<img src="docs/grids.jpg" width="90%"/>  
-<br>
-Additional appearance transfer results obtained by our cross-image attention technique.
-</p>
+This file defines the transfer model, and borrows its .pipe function from the CrossImageAttentionDiffusionPipeline class defined in models/`stable_diffusion.py`.
+Specifically, the model parameters are set by the `get_stable_diffusion_model()` function from `utils.model_utils.py`, however since the file has no more features I won't dwell on it.
+It also defines a new class `AttentionProcessor` used in `register_attention_control(...)`. This class applies changes to the standard model to accomodate for new features, such as:
+* Applying attention masking
+* Performing the cross-image attention in specified timesteps for each of the `up`-steps of the UNet
+The registration function then applies this modification to each layer in the network via the `register_recr(...)` function.
 
-We also provide a notebook to run in Google Colab, please see `notebooks/demo.ipynb`.
+---
 
+### models/stable_diffusion.py
 
-## HuggingFaceDemo :hugs:
-We also provide a simple HuggingFace demo to run our method on your own images.   
-Check it out [here](https://huggingface.co/spaces/yuvalalaluf/cross-image-attention)!
+As the original writer stated, this file defines a modification of `StableDiffusionPipeline` as provided by the `diffusers` module, by auaugmenting it to include the modified UNet model and other things.
+The main function is `__call__(...)` as it defines the pipeline function, and includes the following steps:
+* 0 - 5: Preprocessing, where notably step 3 encodes the prompt and step 5 encodes the latent variables. 
+* 6: Ommitted.
+* 7: Main denoising loop (per timestep `t`), containing several substeps:
+  * Getting a noise prediction for swamp and no-swap. This is done via calling the UNet model in `models.unet_2d_condition.py`. Doesn't have anything particularly special.
+  * Perform one of the following:
+    * If CFG enabled - perform it.
+    * Otherwise, perform a cross-image step and swap CFG. Note that the swap CFG strength increases over the loop process.
+  * Perform DDPM step using the latents and noise prediction.
+  * Use AdaIN.
+* 8: Post-processing.
 
+The DDPM function doesn't contain anything interesting beyond the standard DDPM theory and so I will not elaborate here.
 
-## Acknowledgements 
-This code builds on the code from the [diffusers](https://github.com/huggingface/diffusers) library. In addition, we 
-borrow code from the following repositories: 
-- [Edit-Friendly DDPM Inversion](https://github.com/inbarhub/DDPM_inversion) for inverting the input images.
-- [Prompt Mixing](https://github.com/orpatashnik/local-prompt-mixing) for computing the masks used in our AdaIN operation.
-- [FreeU](https://github.com/ChenyangSi/FreeU) for improving the general generation quality of Stable Diffusion.
+---
+- - -
 
+## SyncMVD
 
-## Citation
-If you use this code for your research, please cite the following work: 
-```
-@misc{alaluf2023crossimage,
-      title={Cross-Image Attention for Zero-Shot Appearance Transfer}, 
-      author={Yuval Alaluf and Daniel Garibi and Or Patashnik and Hadar Averbuch-Elor and Daniel Cohen-Or},
-      year={2023},
-      eprint={2311.03335},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
-}
-```
+### run_experiment.py
 
-# SyncMVD
-
-Official [Pytorch](https://pytorch.org/) & [Diffusers](https://github.com/huggingface/diffusers) implementation of the paper:
-
-
-
-**[Text-Guided Texturing by Synchronized Multi-View Diffusion](https://arxiv.org/pdf/2311.12891)**
-
-<!-- Authors: Yuxin Liu, Minshan Xie, Hanyuan Liu, Tien-Tsin Wong -->
-
-<img src=assets/teaser.jpg width=768>
-
-**SyncMVD** can generate texture for a 3D object from a text prompt using a **Sync**hronized **M**ulti-**V**iew **D**iffusion approach.
-The method shares the denoised content among different views in each denoising step to ensure texture consistency and avoid seams and fragmentation (fig a).
-
-
-
-<table style="table-layout: fixed; width: 100%;">
-        <col style="width: 25%;">
-        <col style="width: 25%;">
-        <col style="width: 25%;">
-        <col style="width: 25%;">
-  <tr>
-  <td>
-    <img src=assets/gif/batman.gif width="170">
-  </td>
-  <td>
-    <img src=assets/gif/david.gif width="170">
-  </td>
-  <td>
-    <img src=assets/gif/teapot.gif width="170">
-  </td>
-  <td>
-    <img src=assets/gif/vangogh.gif width="170">
-  </td>
-  </tr>
-  <tr style="vertical-align: text-top;">
-    <td style="font-family:courier">"Photo of Batman, sitting on a rock."</td>
-    <td style="font-family:courier">"Publicity photo of a 60s movie, full color."</td>
-    <td style="font-family:courier">"A photo of a beautiful chintz glided teapot."</td>
-    <td style="font-family:courier">"A beautiful oil paint of a stone building in Van Gogh style."</td>
-  </tr>
-   <tr>
-  <td>
-    <img src=assets/gif/gloves.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/link.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/house.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/luckycat.gif width="170">
-  </td>
-  </tr>
-  <tr style="vertical-align: text-top;">
-    <td style="font-family:courier">"A photo of a robot hand with mechanical joints."</td>
-    <td style="font-family:courier">"Photo of link in the legend of zelda, photo-realistic, unreal 5."</td>
-    <td style="font-family:courier">"Photo of a lowpoly fantasy house from warcraft game, lawn."</td>
-    <td style="font-family:courier">"Blue and white pottery style lucky cat with intricate patterns."</td>
-  </tr>
-
-  <tr>
-  <td>
-    <img src=assets/gif/chair.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/Moai.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/sneakers.gif width="170">
-  </td>
-  <td>
-    <img src=assets/gif/dragon.gif width="170">
-  </td>
-  </tr>
-  <tr style="vertical-align: text-top;">
-    <td style="font-family:courier">"A photo of an beautiful embroidered seat with royal patterns"</td>
-    <td style="font-family:courier">"Photo of James Harden."</td>
-    <td style="font-family:courier">"A photo of a gray and black Nike Airforce high top sneakers."</td>
-    <td style="font-family:courier">"A photo of a Chinese dragon sculpture, glazed facing, vivid colors."</td>
-  </tr>
-
-  <tr>
-  <td>
-    <img src=assets/gif/guardian.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/horse.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/jackiechan.gif width="170" >
-  </td>
-  <td>
-    <img src=assets/gif/knight.gif width="170">
-  </td>
-  </tr>
-  <tr style="vertical-align: text-top;">
-    <td style="font-family:courier">"A muscular man wearing grass hula skirt."</td>
-    <td style="font-family:courier">"Photo of a horse."</td>
-    <td style="font-family:courier">"A Jackie Chan figure."</td>
-    <td style="font-family:courier">"A photo of a demon knight, flame in eyes, warcraft style."</td>
-  </tr>
-
-</table>
-
-## Installation :wrench:
-The program is developed and tested on Linux system with Nvidia GPU. If you find compatibility issues on Windows platform, you can also consider using [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
-
+File used to run the project.
+The instructions as coppied from the readme file:
 To install, first clone the repository and install the basic dependencies
 ```bash
 git clone https://github.com/LIU-Yuxin/SyncMVD.git
@@ -219,32 +96,42 @@ The pretrained models will be downloaded automatically on demand, including:
 - [lllyasviel/control_v11f1p_sd15_depth](lllyasviel/control_v11f1p_sd15_depth)
 - [lllyasviel/control_v11p_sd15_normalbae](https://huggingface.co/lllyasviel/control_v11p_sd15_normalbae) 
 
-## Data :floppy_disk:
-The current program based on [PyTorch3D](https://github.com/facebookresearch/pytorch3d) library requires a input `.obj` mesh with `.mtl` material and related textures to read the original UV mapping of the object, which may require manual cleaning. Alternatively the program also support auto unwrapping based on [XAtlas](https://github.com/jpcy/xatlas) to load mesh that does not met the above requirements. The program also supports loading `.glb` mesh, but it may not be stable as its a PyTorch3D experiment feature.
+The important function to mind here is the `__call__(...)` of `StableSyncMVDPipeline`, which we will tackle now.
 
-To avoid unexpected artifact, the object being textured should avoid flipped face normals and overlapping UV, and keep the number of triangle faces within around 40,000. You can try [Blender](https://www.blender.org/) for manual mesh cleaning and processing, or its python scripting for automation.
+ -----
 
-You can try out the method with the following pre-processed meshes and configs:
-- [Face - "Portrait photo of Kratos, god of war."](data/face/config.yaml) (by [2on](https://sketchfab.com/3d-models/face-ffde29cb64584cf1a939ac2b58d0a931))
-- [Sneaker - "A photo of a camouflage military boot."](data/sneaker/config.yaml) (by [gianpego](https://sketchfab.com/3d-models/air-jordan-1-1985-2614cef9a3724ec5852144446fbb726f))
+### src/pipeline.py
 
-## Inference :rocket:
-```bash
-python run_experiment.py --config {your config}.yaml
-```
-Refer to [config.py](src/configs.py) for the list of arguments and settings you can adjust. You can change these settings by including them in a `.yaml` config file or passing the related arguments in command line; values specified in command line will overwrite those in config files.
+Main pipeline object, inheriting from `StableDiffusionControlNetPipeline` of the `diffusers` module. Also contains some other functions we might touch on later.
 
-When no output path is specified, the generated result will be placed in the same folder as the config file by default.
+><u>Note:</u> `split_groups(...)` is noted to have no positive effects. We should check whether we should just remove it altogether.
 
-## License :scroll:
-The program licensed under [MIT License](LICENSE).
+One of the arguments that the pipeline gets is `controlnet_guess_mode`. In general, guess mode is usually invoked for ControlNet whenever we don't actually know what to condition on or what we expect to get. However, since this is not the case, this argument is set to `False`.
 
-## Citation :memo:
-```bibtex
-@article{liu2023text,
-  title={Text-Guided Texturing by Synchronized Multi-View Diffusion},
-  author={Liu, Yuxin and Xie, Minshan and Liu, Hanyuan and Wong, Tien-Tsin},
-  journal={arXiv preprint arXiv:2311.12891},
-  year={2023}
-}
-```
+In `initialize_pipepline(...)`:
+1. Initialize camera positions. Aside from the side cameras, there are also 2 top cameras, and front and back cameras. In particular, the front camera view is used as the reference for the reference-based attention later.
+2. Set up the UV mappings. As noted by the annotation, `self.uvp` is used for the latent texture and `self.uvp_rgb` for the color texture.
+
+After that, the rest of the `__call__(...)` function is called:
+* 0 - 5: Preprocessing, out of which step 4 sets up the conditional images, i.e. the depth images given by the mesh to represent its geometry in space.
+* 6: Preparation of the latent variables from the prompt embeddings.
+* 7 - 7.1: More setup for arguments and ControlNet. Unclear.
+* 8: Main denoising loop, using the following steps for timestep `t`. Note that for each timestep, a different background color is chosen for the images, so to not have correlations to the background:
+  * Set up positive and negative embeds. This is kind of a contrastive learning tool.
+  * For each prompt:
+    * Generate `down_block_res_sample_list` and `mid_block_res_sample_list`:
+      * If the prompt is positive - feed the input, prompt embeddings and conditioning (depth) images into ControlNet.
+      * Otherwise, add zero-valued tensors to both lists.
+    * Replace attention processors for those in `src/syncmovd/attention.py`, which we'll touch on later.
+    * Predict the noise using UNet.
+  * Perform CFG.
+  * Perform the denoising step using the predicted noise. The step is defined in `src/syncmvd/step.py`. The specific case of the step function is defined by if `t` is larger than some argument, i.e. at the start of the denoising process.
+  * Step postprocessing, including parameter changes in ControlNet to the conditioning scale and shuffling the background color.
+
+-----
+
+### src/syncmvd/attention.py
+
+- - -
+
+### src/syncmvd/step.py

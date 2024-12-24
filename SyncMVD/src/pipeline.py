@@ -99,7 +99,7 @@ def composite_rendered_view(scheduler, backgrounds, foregrounds, masks, t):
 
 # Split into micro-batches to use less memory in each unet prediction
 # But need more investigation on reducing memory usage
-# Assume it has no possitive effect and use a large "max_batch_size" to skip splitting
+# Assume it has no positive effect and use a large "max_batch_size" to skip splitting
 def split_groups(attention_mask, max_batch_size, ref_view=[]):
 	group_sets = []
 	group = set()
@@ -197,6 +197,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				os.mkdir(dir_)
 
 
+		# 1. Initialize camera positions
 		# Define the cameras for rendering
 		self.camera_poses = []
 		self.attention_mask=[]
@@ -236,6 +237,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
 
 
+		# 2. Set up the UV mappings
 		# Set up pytorch3D for projection between screen space and UV space
 		# uvp is for latent and uvp_rgb for rgb color
 		self.uvp = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
