@@ -143,6 +143,7 @@ class CrossImageAttentionStableDiffusionPipeline(StableDiffusionPipeline):
             )[0]
 
             # perform guidance
+            # Note that according to the default run.py settings, no CFG applies as guidance_scale=1.0
             if do_classifier_free_guidance:
                 _, noise_swap_pred_text = noise_pred_swap.chunk(2)
                 noise_no_swap_pred_uncond, _ = noise_pred_no_swap.chunk(2)
@@ -173,6 +174,7 @@ class CrossImageAttentionStableDiffusionPipeline(StableDiffusionPipeline):
 
             count += 1
 
+        # 8. Set for output
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
