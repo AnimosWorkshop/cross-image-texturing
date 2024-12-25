@@ -132,6 +132,12 @@ After that, the rest of the `__call__(...)` function is called:
 
 ### src/syncmvd/attention.py
 
+Alongside `replace_attention_processors(...)` which has a self-indicative name, the file contains `SamplewiseAttnProcessor2_0` which is used to implement dot-product attention as needed for SyncMVD. The `__call__(...)` function includes the following:
+* Setting up queries from the hidden state.
+* Setting up the keys and values from the encoder hidden states.
+* Perform the cross-view attention according to the attention mask and with the reference view.
+* Perform linear projection and dropout (?) and add results to the residual hidden states.
+
 - - -
 
 ### src/syncmvd/step.py
