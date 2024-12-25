@@ -141,3 +141,11 @@ Alongside `replace_attention_processors(...)` which has a self-indicative name, 
 - - -
 
 ### src/syncmvd/step.py
+
+Performs the DDPM step, guided by the following points:
+* 1: Compute $\alpha$ and $\beta$ variables according to DDPM theory.
+* 2 - 3: Compute $x_0$.
+* 4 - 5: Compute `pred_tex` as $x_{t-1}\sim\mathcal N({\mu_{t}, \mathbb{1}\epsilon})$ via interpolation from $x_0$ and $x_t$.
+* 6: Add noise around the precited mean $x_{t-1}$.
+
+If I understand correctly, assigning the weighted average via visibility masks in UV space happens using `uvp.bake_texture(...)`.

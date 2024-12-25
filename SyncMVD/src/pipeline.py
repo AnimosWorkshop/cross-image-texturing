@@ -671,8 +671,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					
 
 
-				# Update pipeline settings after one step:
-				# 1. Annealing ControlNet scale
+				# 9. Update pipeline settings after one step:
+				# 9.1. Annealing ControlNet scale
 				if (1-t/num_timesteps) < control_guidance_start[0]:
 					controlnet_conditioning_scale = initial_controlnet_conditioning_scale
 				elif (1-t/num_timesteps) > control_guidance_end[0]:
@@ -681,7 +681,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					alpha = ((1-t/num_timesteps) - control_guidance_start[0]) / (control_guidance_end[0] - control_guidance_start[0])
 					controlnet_conditioning_scale = alpha * initial_controlnet_conditioning_scale + (1-alpha) * controlnet_conditioning_end_scale
 
-				# 2. Shuffle background colors; only black and white used after certain timestep
+				# 9.2. Shuffle background colors; only black and white used after certain timestep
 				if (1-t/num_timesteps) < shuffle_background_change:
 					background_colors = [random.choice(list(color_constants.keys())) for i in range(len(self.camera_poses))]
 				elif (1-t/num_timesteps) < shuffle_background_end:
@@ -691,7 +691,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 
 
-				# Logging at "log_interval" intervals and last step
+				# 10. Logging at "log_interval" intervals and last step
 				# Choose to uses color approximation or vae decoding
 				if i % log_interval == log_interval-1 or t == 1:
 					if view_fast_preview:
