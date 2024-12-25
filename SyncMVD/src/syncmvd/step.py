@@ -122,8 +122,3 @@ def step_tex(
 	masks = [view[-1:] for view in prev_views]
 
 	return {"prev_sample": pred_prev_sample, "pred_original_sample":pred_original_sample, "prev_tex": prev_tex}
-
-	if not return_dict:
-		return pred_prev_sample, pred_original_sample
-	pass
-
