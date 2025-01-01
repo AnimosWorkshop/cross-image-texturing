@@ -173,6 +173,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			mesh_path=None,
 			mesh_transform=None,
 			mesh_autouv=None,
+			mesh_path_app=None,
+			mesh_transform_app=None,
+			mesh_autouv_app=None,
 			camera_azims=None,
 			camera_centers=None,
 			top_cameras=True,
@@ -244,11 +247,23 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		if mesh_path.lower().endswith(".obj"):
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		elif mesh_path.lower().endswith(".glb"):
-			self.uvp.load_glb_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+			mesh_autouv=False
+			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
-		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
+		# CIT - Now also configuring for appearance mesh
+		self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
+		if mesh_path_app.lower().endswith(".obj"):
+			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
+		elif mesh_path_app.lower().endswith(".glb"):
+			mesh_autouv_app = False
+			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
+		else:
+			assert False, "The mesh file format is not supported. Use .obj or .glb."
+
+		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
+		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
 		self.uvp_rgb = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
 		self.uvp_rgb.mesh = self.uvp.mesh.clone()
@@ -256,10 +271,19 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		_,_,_,cos_maps,_, _ = self.uvp_rgb.render_geometry()
 		self.uvp_rgb.calculate_cos_angle_weights(cos_maps, fill=False)
 
+		# CIT - Configure RGB mesh for appearance mesh
+		self.uvp_rgb_app = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+		self.uvp_rgb_app.mesh = self.uvp.mesh.clone()
+		self.uvp_rgb_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
+		_,_,_,cos_maps,_, _ = self.uvp_rgb_app.render_geometry()
+		self.uvp_rgb_app.calculate_cos_angle_weights(cos_maps, fill=False)
+
 		# Save some VRAM
 		del _, cos_maps
 		self.uvp.to("cpu")
 		self.uvp_rgb.to("cpu")
+		self.uvp_app.to("cpu")
+		self.uvp_rgb_app.to("cpu")
 
 
 		color_images = torch.FloatTensor([color_constants[name] for name in color_names]).reshape(-1,3,1,1).to(dtype=self.text_encoder.dtype, device=self._execution_device)
@@ -312,6 +336,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		mesh_path: str = None,
 		mesh_transform: dict = None,
 		mesh_autouv = False,
+
+		mesh_path_app: str = None,
+		mesh_transform_app: dict = None,
+		mesh_autouv_app = False,
+
 		camera_azims=None,
 		camera_centers=None,
 		top_cameras=True,
@@ -338,6 +367,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				mesh_path=mesh_path,
 				mesh_transform=mesh_transform,
 				mesh_autouv=mesh_autouv,
+				mesh_path_app=mesh_path_app,
+				mesh_transform_app=mesh_transform_app,
+				mesh_autouv_app=mesh_autouv_app,
 				camera_azims=camera_azims,
 				camera_centers=camera_centers,
 				top_cameras=top_cameras,
@@ -447,6 +479,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		cond = np.concatenate([img for img in cond], axis=1)
 		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
 
+		conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
+		conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
+
 		# 5. Prepare timesteps
 		self.scheduler.set_timesteps(num_inference_steps, device=device)
 		timesteps = self.scheduler.timesteps
@@ -471,6 +506,17 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
 		latents = composited_tensor.type(latents.dtype)
 		self.uvp.to("cpu")
+
+		# CIT - Setting up the views for the appearance mesh
+		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
+		# latent_tex_app = self.uvp_app.set_premade_texture()
+		app_views = self.uvp.render_textured_views()
+		foregrounds_app = [view[:-1] for view in noise_views]
+		masks_app = [view[-1:] for view in noise_views]
+		# TODO: Make sure that the latents here aer the same as the ones from before; unclear if they need special settings
+		composited_tensor_app = composite_rendered_view(self.scheduler, latents, foregrounds_app, masks_app, timesteps[0]+1)
+		latents_app = composited_tensor.type(latents.dtype)
+		self.uvp_app.to("cpu")
 
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline

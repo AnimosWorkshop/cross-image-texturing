@@ -149,3 +149,20 @@ Performs the DDPM step, guided by the following points:
 * 6: Add noise around the precited mean $x_{t-1}$.
 
 If I understand correctly, assigning the weighted average via visibility masks in UV space happens using `uvp.bake_texture(...)`.
+- - -
+- - -
+## Our Project
+
+### cit_run.py
+
+Used to actually run the project. Configurations are set in `src/cit_configs.py`.
+
+### src/project.py
+
+Need to delete, useless save from a bygone era.
+
+### SyncMVD/src/pipeline.py
+
+Added a few variables to track important things for the appearance mesh, including:
+* `self.uvp_app` - UVProjection handling the appearance mesh.
+* `self.uvp_rgb_app` - UVProjection handling the appearance mesh in RGB.
