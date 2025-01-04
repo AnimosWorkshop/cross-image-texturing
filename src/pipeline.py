@@ -515,13 +515,14 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 
-
 		# Configure CIA Model
 		cia_cfg = RunConfig()
+		cia_cfg.prompt = prompt
 		set_seed(cia_cfg.seed)
 		cia_model = AppearanceTransferModel(cia_cfg)
 		
-		for noise_view, app_view in zip(foregrounds, foregrounds_app):
+		# Perform appearance transfer
+		for i, (noise_view, app_view) in enumerate(zip(foregrounds, foregrounds_app)):
 			cia_model.enable_edit = False  # Deactivate the cross-image attention layers
 			latents_app, latents_struct, noise_app, noise_struct = invert_images(app_image=app_view,
                                                                              struct_image=noise_view,
@@ -536,7 +537,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			cia_model.enable_edit = True  # Activate our cross-image attention layers
 			start_step = min(cia_cfg.cross_attn_32_range.start, cia_cfg.cross_attn_64_range.start)
 			end_step = max(cia_cfg.cross_attn_32_range.end, cia_cfg.cross_attn_64_range.end)
-			images = cia_model.pipe(
+			foregrounds[i], foregrounds_app[i], _ = cia_model.pipe(
 				prompt=[cia_cfg.prompt] * 3,
 				latents=init_latents,
 				guidance_scale=1.0,
@@ -548,7 +549,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				generator=torch.Generator('cuda').manual_seed(cia_cfg.seed),
 				cross_image_attention_range=Range(start=start_step, end=end_step),
 			).images
-			pass
 
 		self.uvp_app.to("cpu")
 				
@@ -677,10 +677,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch, meta \
 						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list, self.group_metas):
-						if t > num_timesteps * (1- ref_attention_end):
-							replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=1)
-						else:
-							replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=0)
+						# All of these moved into note since AttentionTransferModel handled attention already
+						# if t > num_timesteps * (1- ref_attention_end):
+							# replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=1)
+						# else:
+							# replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=0)
 
 						noise_pred = self.unet(
 							model_input_batch,

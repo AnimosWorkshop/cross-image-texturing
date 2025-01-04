@@ -5,9 +5,11 @@ from datetime import datetime
 import torch
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, UniPCMultistepScheduler
-from SyncMVD.src.pipeline import StableSyncMVDPipeline
+from diffusers.training_utils import set_seed
+from src.pipeline import StableSyncMVDPipeline
 from src.cit_configs import *
 from shutil import copy
+from src.appearance_transfer_model import AppearanceTransferModel
 
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
@@ -70,17 +72,20 @@ elif opt.cond_type == "depth":
 pipe = StableDiffusionControlNetPipeline.from_pretrained(
 	"runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float16
 )
-
-
 pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
 
+model_cfg = RunConfig()
+set_seed(model_cfg.seed)
+model = AppearanceTransferModel(RunConfig(), pipe=syncmvd)
+
+
 # Run the SyncMVD pipeline
 
 
-result_tex_rgb, textured_views, v = syncmvd(
+result_tex_rgb, textured_views, v = model.pipe(
 	prompt=opt.prompt,
 	height=opt.latent_view_size*8,
 	width=opt.latent_view_size*8,
