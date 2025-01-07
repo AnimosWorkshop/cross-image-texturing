@@ -9,7 +9,7 @@ from diffusers.training_utils import set_seed
 from src.pipeline import StableSyncMVDPipeline
 from src.cit_configs import *
 from shutil import copy
-from src.appearance_transfer_model import AppearanceTransferModel
+from src.CIA.appearance_transfer_model import AppearanceTransferModel
 
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
@@ -77,9 +77,9 @@ pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
 
-model_cfg = RunConfig()
+model_cfg = RunConfig(opt.prompt)
 set_seed(model_cfg.seed)
-model = AppearanceTransferModel(RunConfig(), pipe=syncmvd)
+model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
 
 # Run the SyncMVD pipeline

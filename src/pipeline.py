@@ -35,18 +35,18 @@ from diffusers.models.attention_processor import Attention, AttentionProcessor
 from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-from SyncMVD.src.renderer.project import UVProjection as UVP
+from src.SyncMVD.src.renderer.project import UVProjection as UVP
 
 
-from SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
-from SyncMVD.src.syncmvd.prompt import *
-from SyncMVD.src.syncmvd.step import step_tex
-from SyncMVD.src.utils import *
+from src.SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
+from src.SyncMVD.src.syncmvd.prompt import *
+from src.SyncMVD.src.syncmvd.step import step_tex
+from src.SyncMVD.src.utils import *
 
-from appearance_transfer_model import AppearanceTransferModel
-from cit_configs import Range, RunConfig
-from CIA.utils.latent_utils import invert_images
-from CIA.utils.latent_utils import get_init_latents_and_noises
+from src.CIA.appearance_transfer_model import AppearanceTransferModel
+from src.cit_configs import Range, RunConfig
+from src.CIA.utils.latent_utils import invert_images
+from src.CIA.utils.latent_utils import get_init_latents_and_noises
 
 
 if torch.cuda.is_available():

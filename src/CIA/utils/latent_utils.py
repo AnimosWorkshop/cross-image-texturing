@@ -5,10 +5,10 @@ import numpy as np
 import torch
 from PIL import Image
 
-from appearance_transfer_model import AppearanceTransferModel
-from config import RunConfig
-from utils import image_utils
-from utils.ddpm_inversion import invert
+from src.CIA.appearance_transfer_model import AppearanceTransferModel
+from src.cit_configs import RunConfig
+from src.CIA.utils import image_utils
+from src.CIA.utils.ddpm_inversion import invert
 
 
 def load_latents_or_invert_images(model: AppearanceTransferModel, cfg: RunConfig):

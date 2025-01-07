@@ -10,8 +10,8 @@ from diffusers.schedulers import KarrasDiffusionSchedulers
 from tqdm import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer, CLIPImageProcessor
 
-from config import Range
-from models.unet_2d_condition import FreeUUNet2DConditionModel
+from src.CIA.config import Range
+from src.CIA.models.unet_2d_condition import FreeUUNet2DConditionModel
 
 
 class CrossImageAttentionStableDiffusionPipeline(StableDiffusionPipeline):

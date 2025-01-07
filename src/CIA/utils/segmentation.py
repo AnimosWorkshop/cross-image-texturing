@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from sklearn.cluster import KMeans
 
-from constants import STYLE_INDEX, STRUCT_INDEX
+from src.CIA.constants import STYLE_INDEX, STRUCT_INDEX
 
 nltk.download('punkt')
 nltk.download('averaged_perceptron_tagger')

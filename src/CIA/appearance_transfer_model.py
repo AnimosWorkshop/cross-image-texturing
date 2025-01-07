@@ -3,13 +3,13 @@ from typing import List, Optional, Callable
 import torch
 import torch.nn.functional as F
 
-from config import RunConfig
-from constants import OUT_INDEX, STRUCT_INDEX, STYLE_INDEX
-from models.stable_diffusion import CrossImageAttentionStableDiffusionPipeline
-from utils import attention_utils
-from utils.adain import masked_adain, adain
-from utils.model_utils import get_stable_diffusion_model
-from utils.segmentation import Segmentor
+from src.CIA.config import RunConfig
+from src.CIA.constants import OUT_INDEX, STRUCT_INDEX, STYLE_INDEX
+from src.CIA.models.stable_diffusion import CrossImageAttentionStableDiffusionPipeline
+from src.CIA.utils import attention_utils
+from src.CIA.utils.adain import masked_adain, adain
+from src.CIA.utils.model_utils import get_stable_diffusion_model
+from src.CIA.utils.segmentation import Segmentor
 
 
 """

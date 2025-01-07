@@ -99,9 +99,15 @@ class RunConfig:
     # Number of steps to skip in the denoising process (used value from original edit-friendly DDPM paper)
     skip_steps: int = 32
 
+
+    def __init__(self, prompt):
+        self.prompt = prompt
+
+
     def __post_init__(self):
-        save_name = f'app={self.app_image_path.stem}---struct={self.struct_image_path.stem}'
-        self.output_path = self.output_path / self.domain_name / save_name
+        # save_name = f'app={self.app_image_path.stem}---struct={self.struct_image_path.stem}'
+        save_name = f'app=app---struct=struct'
+        # self.output_path = self.output_path / self.domain_name / save_name
         self.output_path.mkdir(parents=True, exist_ok=True)
 
         # Handle the domain name, prompt, and object nouns used for masking, etc.
