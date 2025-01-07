@@ -389,7 +389,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				logging_config=logging_config
 			)
 
-
+		# CIT - add kwarg
+		cross_attention_kwargs['perform_swap'] = True
 		
 		num_timesteps = self.scheduler.config.num_train_timesteps
 		initial_controlnet_conditioning_scale = controlnet_conditioning_scale
@@ -508,13 +509,20 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		noise_views = self.uvp.render_textured_views()
 		foregrounds = [view[:-1] for view in noise_views]
 		masks = [view[-1:] for view in noise_views]
+		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
+		latents = composited_tensor.type(latents.dtype)
+		self.uvp.to("cpu")
 		# CIT - sneakily swap noise_views with the transfered views
 		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
 		# latent_tex_app = self.uvp_app.set_premade_texture()
 		app_views = self.uvp.render_textured_views()
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
+		composited_tensor_app = composite_rendered_view(self.scheduler, latents_app, foregrounds_app, masks_app, timesteps[0]+1)
+		latents_app = composited_tensor_app.type(latents_app.dtype)
+		self.uvp_app.to("cpu")
 
+		"""
 		# Configure CIA Model
 		cia_cfg = RunConfig()
 		cia_cfg.prompt = prompt
@@ -549,12 +557,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				generator=torch.Generator('cuda').manual_seed(cia_cfg.seed),
 				cross_image_attention_range=Range(start=start_step, end=end_step),
 			).images
-
-		self.uvp_app.to("cpu")
+		"""
 				
-		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
-		latents = composited_tensor.type(latents.dtype)
-		self.uvp.to("cpu")
+		
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -588,6 +593,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 				# expand the latents if we are doing classifier free guidance
 				latent_model_input = self.scheduler.scale_model_input(latents, t)
+				latent_model_input_app = self.scheduler.scale_model_input(latents_app, t)
 
 				'''
 					Use groups to manage prompt and results
@@ -618,9 +624,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						down_block_res_samples_list = []
 						mid_block_res_sample_list = []
 
-						model_input_batches = [torch.index_select(control_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-						prompt_embeds_batches = [torch.index_select(controlnet_prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-						conditioning_images_batches = [torch.index_select(conditioning_images, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+						# model_input_batches = [torch.index_select(control_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+						# prompt_embeds_batches = [torch.index_select(controlnet_prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+						# conditioning_images_batches = [torch.index_select(conditioning_images, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+						model_input_batches = [torch.stack(latents[i], latents[i], latents_app[i]) for i in range(latents.size[0])]
+						prompt_embeds_batches = [torch.stack(embed, embed, embed) for embed in prompt_embeds]
+						model_input_batches = [torch.stack(conditioning_images[i], conditioning_images[i], conditioning_images_app[i]) for i in range(conditioning_images.size[0])]
 
 						for model_input_batch ,prompt_embeds_batch, conditioning_images_batch \
 							in zip (model_input_batches, prompt_embeds_batches, conditioning_images_batches):
@@ -672,8 +681,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					
 					'''
 					noise_pred_list = []
-					model_input_batches = [torch.index_select(latent_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-					prompt_embeds_batches = [torch.index_select(prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+					# model_input_batches = [torch.index_select(latent_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+					# prompt_embeds_batches = [torch.index_select(prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
+					# CIT - need to modify the batches so that they contain appearance latents
+					model_input_batches = [torch.stack(latents[i], latents[i], latents_app[i]) for i in range(latents.size[0])]
+					prompt_embeds_batches = [torch.stack(embed, embed, embed) for embed in prompt_embeds]
 
 					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch, meta \
 						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list, self.group_metas):
@@ -694,8 +706,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						)[0]
 						noise_pred_list.append(noise_pred)
 
-					noise_pred_list = [torch.index_select(noise_pred, dim=0, index=torch.tensor(meta[1], device=self._execution_device)) for noise_pred, meta in zip(noise_pred_list, self.group_metas)]
-					noise_pred = torch.cat(noise_pred_list, dim=0)
+					# noise_pred_list = [torch.index_select(noise_pred, dim=0, index=torch.tensor(meta[1], device=self._execution_device)) for noise_pred, meta in zip(noise_pred_list, self.group_metas)]
+					# noise_pred = torch.cat(noise_pred_list, dim=0)
 					down_block_res_samples_list = None
 					mid_block_res_sample_list = None
 					noise_pred_list = None

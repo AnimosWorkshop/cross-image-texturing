@@ -23,6 +23,8 @@ from .geometry import HardGeometryShader
 from .shader import HardNChannelFlatShader
 from .voronoi import voronoi_solve
 
+### THIS FILE IS CURRENTLY UNUSED
+
 
 # Pytorch3D based renderering functions, managed in a class
 # Render size is recommended to be the same as your latent view size
