@@ -6,6 +6,7 @@ import numpy as np
 import math
 import random
 import torch
+import copy
 from torch import functional as F
 from torch import nn
 from torchvision.transforms import Compose, Resize, GaussianBlur, InterpolationMode
@@ -390,7 +391,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			)
 
 		# CIT - add kwarg
-		cross_attention_kwargs['perform_swap'] = True
+		if cross_attention_kwargs is None:
+			cross_attention_kwargs = {'perform_swap': True} 
+		elif type(cross_attention_kwargs) == dict:
+			cross_attention_kwargs['perform_swamp'] = True
+		else:
+			raise(TypeError())
 		
 		num_timesteps = self.scheduler.config.num_train_timesteps
 		initial_controlnet_conditioning_scale = controlnet_conditioning_scale
@@ -485,6 +491,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		cond = np.concatenate([img for img in cond], axis=1)
 		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
 
+		self.uvp_app.to(self._execution_device)
 		conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
 		conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
 
@@ -504,6 +511,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			generator,
 			None,
 		)
+		latents_app = copy.deepcopy(latents)
 
 		latent_tex = self.uvp.set_noise_texture()
 		noise_views = self.uvp.render_textured_views()
@@ -515,7 +523,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# CIT - sneakily swap noise_views with the transfered views
 		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
 		# latent_tex_app = self.uvp_app.set_premade_texture()
-		app_views = self.uvp.render_textured_views()
+		app_views = self.uvp_app.render_textured_views()
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, latents_app, foregrounds_app, masks_app, timesteps[0]+1)
@@ -627,9 +635,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						# model_input_batches = [torch.index_select(control_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 						# prompt_embeds_batches = [torch.index_select(controlnet_prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 						# conditioning_images_batches = [torch.index_select(conditioning_images, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-						model_input_batches = [torch.stack(latents[i], latents[i], latents_app[i]) for i in range(latents.size[0])]
-						prompt_embeds_batches = [torch.stack(embed, embed, embed) for embed in prompt_embeds]
-						model_input_batches = [torch.stack(conditioning_images[i], conditioning_images[i], conditioning_images_app[i]) for i in range(conditioning_images.size[0])]
+						model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
+						prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
+						conditioning_images_batches = [torch.stack((conditioning_images[i], conditioning_images[i], conditioning_images_app[i])) for i in range(conditioning_images.shape[0])]
 
 						for model_input_batch ,prompt_embeds_batch, conditioning_images_batch \
 							in zip (model_input_batches, prompt_embeds_batches, conditioning_images_batches):
@@ -684,8 +692,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					# model_input_batches = [torch.index_select(latent_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 					# prompt_embeds_batches = [torch.index_select(prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 					# CIT - need to modify the batches so that they contain appearance latents
-					model_input_batches = [torch.stack(latents[i], latents[i], latents_app[i]) for i in range(latents.size[0])]
-					prompt_embeds_batches = [torch.stack(embed, embed, embed) for embed in prompt_embeds]
+					model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
+					prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
 
 					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch, meta \
 						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list, self.group_metas):
