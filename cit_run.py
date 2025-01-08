@@ -120,7 +120,7 @@ def create_controlnet(opt):
 
 def create_pipe(controlnet):
 	"""
-	Create and return the pipeline based on the given options and controlnet.
+	Create and return the usual stable diffusion pipeline based on the given options and controlnet.
 	Args:
 		opt (Namespace): A namespace object containing the options.
 		controlnet (ControlNetModel): The controlnet model.

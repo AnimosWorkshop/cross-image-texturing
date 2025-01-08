@@ -44,7 +44,7 @@ Some of the important pipe parameters are:
 ---
 ### appearance_transfer_model.py
 
-This file defines the transfer model, and borrows its .pipe function from the CrossImageAttentionDiffusionPipeline class defined in models/`stable_diffusion.py`.
+This file defines the transfer model, and borrows its .pipe function from the CrossImageAttentionStableDiffusionPipeline class defined in models/`stable_diffusion.py`.
 Specifically, the model parameters are set by the `get_stable_diffusion_model()` function from `utils.model_utils.py`, however since the file has no more features I won't dwell on it.
 It also defines a new class `AttentionProcessor` used in `register_attention_control(...)`. This class applies changes to the standard model to accomodate for new features, such as:
 * Applying attention masking
