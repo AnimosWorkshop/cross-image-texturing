@@ -11,6 +11,8 @@ from src.cit_configs import *
 from shutil import copy
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 
+from memory_profiler import profile
+
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
@@ -103,6 +105,7 @@ def get_log_configurations(opt, output_dir):
   
 	return logging_config
 
+@profile
 def create_controlnet(opt):
 	"""
 	Create and return the controlnet based on the given options.
@@ -118,6 +121,7 @@ def create_controlnet(opt):
   
 	return controlnet  
 
+@profile
 def create_pipe(controlnet):
 	"""
 	Create and return the usual stable diffusion pipeline based on the given options and controlnet.
@@ -134,6 +138,7 @@ def create_pipe(controlnet):
 
 	return pipe
 
+@profile
 def create_model(opt, pipe):
 	"""
 	Create and return the appearance transfer model based on the given options, pipeline, and logging configurations.
@@ -150,6 +155,7 @@ def create_model(opt, pipe):
 
 	return model
 
+@profile
 def run_the_pipeline(opt, model, mesh_path, mesh_path_app, logging_config):
 	"""
 	Executes the pipeline for cross-image texturing using the provided model and options.
