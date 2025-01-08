@@ -216,7 +216,7 @@ def run_the_pipeline(opt, model, mesh_path, mesh_path_app, logging_config):
 
 	return result_tex_rgb, textured_views, v
 
-
+@profile
 def main():
 	mesh_path, mesh_path_app, output_root = get_paths(opt)
 	output_dir = get_output_dir(opt, output_root, mesh_path)
@@ -229,7 +229,7 @@ def main():
 	logging_config = get_log_configurations(opt, output_dir)
 	controlnet = create_controlnet(opt)
 	pipe = create_pipe(controlnet)
-	model = create_model(opt, pipe, logging_config)
+	model = create_model(opt, pipe)
  
 	result_tex_rgb, textured_views, v = run_the_pipeline(opt, model, mesh_path, mesh_path_app, logging_config)
 	
