@@ -1,3 +1,4 @@
 *.yaml
 *.jpg
 ./src/__pycache__/*
+./src/SyncMVD/src/__pycache__/*

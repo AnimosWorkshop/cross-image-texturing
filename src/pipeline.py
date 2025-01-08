@@ -182,6 +182,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			mesh_path_app=None,
 			mesh_transform_app=None,
 			mesh_autouv_app=None,
+			tex_app_path=None,
 			camera_azims=None,
 			camera_centers=None,
 			top_cameras=True,
@@ -243,7 +244,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			ref_views = [front_view_idx]
 
 		# Calculate in-group attention mask
-		self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
+		# self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
 
 
 		# 2. Set up the UV mappings
@@ -283,6 +284,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp_rgb_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 		_,_,_,cos_maps,_, _ = self.uvp_rgb_app.render_geometry()
 		self.uvp_rgb_app.calculate_cos_angle_weights(cos_maps, fill=False)
+
 
 		# Save some VRAM
 		del _, cos_maps
@@ -346,6 +348,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		mesh_path_app: str = None,
 		mesh_transform_app: dict = None,
 		mesh_autouv_app = False,
+		tex_app_path=None,
 
 		camera_azims=None,
 		camera_centers=None,
@@ -376,6 +379,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				mesh_path_app=mesh_path_app,
 				mesh_transform_app=mesh_transform_app,
 				mesh_autouv_app=mesh_autouv_app,
+				tex_app_path=tex_app_path,
 				camera_azims=camera_azims,
 				camera_centers=camera_centers,
 				top_cameras=top_cameras,
@@ -522,7 +526,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 		# CIT - sneakily swap noise_views with the transfered views
 		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
-		# latent_tex_app = self.uvp_app.set_premade_texture()
+		self.uvp_app.load_texture_from_png(tex_app_path)
 		app_views = self.uvp_app.render_textured_views()
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
@@ -632,9 +636,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						down_block_res_samples_list = []
 						mid_block_res_sample_list = []
 
-						# model_input_batches = [torch.index_select(control_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-						# prompt_embeds_batches = [torch.index_select(controlnet_prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-						# conditioning_images_batches = [torch.index_select(conditioning_images, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 						model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
 						prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
 						conditioning_images_batches = [torch.stack((conditioning_images[i], conditioning_images[i], conditioning_images_app[i])) for i in range(conditioning_images.shape[0])]
@@ -689,14 +690,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					
 					'''
 					noise_pred_list = []
-					# model_input_batches = [torch.index_select(latent_model_input, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
-					# prompt_embeds_batches = [torch.index_select(prompt_embeds, dim=0, index=torch.tensor(meta[0], device=self._execution_device)) for meta in self.group_metas]
 					# CIT - need to modify the batches so that they contain appearance latents
 					model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
 					prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
 
-					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch, meta \
-						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list, self.group_metas):
+					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch \
+						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list):
 						# All of these moved into note since AttentionTransferModel handled attention already
 						# if t > num_timesteps * (1- ref_attention_end):
 							# replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=1)
@@ -729,10 +728,10 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				if do_classifier_free_guidance:
 					noise_pred = result_groups["negative"] + guidance_scale * (positive_noise_pred - result_groups["negative"])
 
-
-				if do_classifier_free_guidance and guidance_rescale > 0.0:
+				# CIT - This seems unreachable and references things that do not exist, so I comment it here
+				# if do_classifier_free_guidance and guidance_rescale > 0.0:
 					# Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
-					noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
+					# noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
 
 				self.uvp.to(self._execution_device)
 				# compute the previous noisy sample x_t -> x_t-1

@@ -69,7 +69,7 @@ pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
 
-
+# Perform the pipeline.__call__ method.
 result_tex_rgb, textured_views, v = syncmvd(
 	prompt=opt.prompt,
 	height=opt.latent_view_size*8,

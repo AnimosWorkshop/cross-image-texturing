@@ -1,5 +1,6 @@
 import torch
 import pytorch3d
+from PIL import Image
 
 
 from pytorch3d.io import load_objs_as_meshes, load_obj, save_obj, IO
@@ -19,11 +20,9 @@ from pytorch3d.renderer import (
 	TexturesUV
 )
 
-from .geometry import HardGeometryShader
-from .shader import HardNChannelFlatShader
-from .voronoi import voronoi_solve
-
-### THIS FILE IS CURRENTLY UNUSED
+from src.SyncMVD.src.renderer.geometry import HardGeometryShader
+from src.SyncMVD.src.renderer.shader import HardNChannelFlatShader
+from src.SyncMVD.src.renderer.voronoi import voronoi_solve
 
 
 # Pytorch3D based renderering functions, managed in a class
@@ -42,7 +41,7 @@ class UVProjection():
 
 
 	# Load obj mesh, rescale the mesh to fit into the bounding box
-	def load_mesh(self, mesh_path, scale_factor=2.0, auto_center=True, autouv=False, is_app=False):
+	def load_mesh(self, mesh_path, scale_factor=2.0, auto_center=True, autouv=False):
 		mesh = load_objs_as_meshes([mesh_path], device=self.device)
 		if auto_center:
 			verts = mesh.verts_packed()
@@ -57,15 +56,10 @@ class UVProjection():
 
 		if autouv or (mesh.textures is None):
 			mesh = self.uv_unwrap(mesh)
-
-		# CIT - we now have 2 meshes!
-		if is_app:
-			self.mesh_app = mesh
-		else:
-			self.mesh = mesh
+		self.mesh = mesh
 
 
-	def load_glb_mesh(self, mesh_path, scale_factor=2.0, auto_center=True, autouv=False, is_app=False):
+	def load_glb_mesh(self, mesh_path, scale_factor=2.0, auto_center=True, autouv=False):
 		from pytorch3d.io.experimental_gltf_io import MeshGlbFormat
 		io = IO()
 		io.register_meshes_format(MeshGlbFormat())
@@ -83,12 +77,7 @@ class UVProjection():
 			mesh.scale_verts_((scale_factor))
 		if autouv or (mesh.textures is None):
 			mesh = self.uv_unwrap(mesh)
-		
-		# CIT - we now have 2 meshes!
-		if is_app:
-			self.mesh_app = mesh
-		else:
-			self.mesh = mesh
+		self.mesh = mesh
 
 
 	# Save obj mesh
@@ -139,28 +128,24 @@ class UVProjection():
 		is intact.
 	'''
 	def disconnect_faces(self):
-		meshes = [self.mesh, self.mesh_app]
-		for i, mesh in enumerate(meshes):
-			verts_list = mesh.verts_list()
-			faces_list = mesh.faces_list()
-			verts_uvs_list = mesh.textures.verts_uvs_list()
-			faces_uvs_list = mesh.textures.faces_uvs_list()
-			packed_list = [v[f] for v,f in zip(verts_list, faces_list)]
-			verts_disconnect_list = [
-				torch.zeros(
-					(verts_uvs_list[i].shape[0], 3), 
-					dtype=verts_list[0].dtype, 
-					device=verts_list[0].device
-				) 
-				for i in range(len(verts_list))]
-			for i in range(len(verts_list)):
-				verts_disconnect_list[i][faces_uvs_list] = packed_list[i]
-			assert not mesh.has_verts_normals(), "Not implemented for vertex normals"
-			if i == 0:
-				self.mesh_d = Meshes(verts_disconnect_list, faces_uvs_list, mesh.textures)
-			else: # i == 1
-				self.mesh_d_app = Meshes(verts_disconnect_list, faces_uvs_list, mesh.textures)
-		return (self.mesh_d, self.mesh_d_app)
+		mesh = self.mesh
+		verts_list = mesh.verts_list()
+		faces_list = mesh.faces_list()
+		verts_uvs_list = mesh.textures.verts_uvs_list()
+		faces_uvs_list = mesh.textures.faces_uvs_list()
+		packed_list = [v[f] for v,f in zip(verts_list, faces_list)]
+		verts_disconnect_list = [
+			torch.zeros(
+				(verts_uvs_list[i].shape[0], 3), 
+				dtype=verts_list[0].dtype, 
+				device=verts_list[0].device
+			) 
+			for i in range(len(verts_list))]
+		for i in range(len(verts_list)):
+			verts_disconnect_list[i][faces_uvs_list] = packed_list[i]
+		assert not mesh.has_verts_normals(), "Not implemented for vertex normals"
+		self.mesh_d = Meshes(verts_disconnect_list, faces_uvs_list, mesh.textures)
+		return self.mesh_d
 
 
 	'''
@@ -170,25 +155,21 @@ class UVProjection():
 		z value as world space geometry.
 	'''
 	def construct_uv_mesh(self):
-		meshes = [self.mesh_d, self.mesh_d_app]
-		for j, mesh in enumerate(meshes):
-			verts_list = mesh.verts_list()
-			verts_uvs_list = mesh.textures.verts_uvs_list()
-			# faces_list = [torch.flip(faces, [-1]) for faces in mesh.faces_list()]
-			new_verts_list = []
-			for i, (verts, verts_uv) in enumerate(zip(verts_list, verts_uvs_list)):
-				verts = verts.clone()
-				verts_uv = verts_uv.clone()
-				verts[...,0:2] = verts_uv[...,:]
-				verts = (verts - 0.5) * 2
-				verts[...,2] *= 1
-				new_verts_list.append(verts)
-			textures_uv = mesh.textures.clone()
-			if j == 0:
-				self.mesh_uv = Meshes(new_verts_list, mesh.faces_list(), textures_uv)
-			else: # j == 1:
-				self.mesh_uv_app = Meshes(new_verts_list, mesh.faces_list(), textures_uv)
-		return (self.mesh_uv, self.mesh_uv_app)
+		mesh = self.mesh_d
+		verts_list = mesh.verts_list()
+		verts_uvs_list = mesh.textures.verts_uvs_list()
+		# faces_list = [torch.flip(faces, [-1]) for faces in mesh.faces_list()]
+		new_verts_list = []
+		for i, (verts, verts_uv) in enumerate(zip(verts_list, verts_uvs_list)):
+			verts = verts.clone()
+			verts_uv = verts_uv.clone()
+			verts[...,0:2] = verts_uv[...,:]
+			verts = (verts - 0.5) * 2
+			verts[...,2] *= 1
+			new_verts_list.append(verts)
+		textures_uv = mesh.textures.clone()
+		self.mesh_uv = Meshes(new_verts_list, mesh.faces_list(), textures_uv)
+		return self.mesh_uv
 
 
 	# Set texture for the current mesh.
@@ -213,6 +194,13 @@ class UVProjection():
 		self.set_texture_map(noise_texture)
 		return noise_texture
 
+	def load_texture_from_png(self, png_path):
+		image = Image.open(png_path).convert("RGB")
+		image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255.0
+
+		texture_tensor = image_tensor.permute(2, 0, 1).to(self.device)
+		self.set_texture_map(texture_tensor)
+		return texture_tensor
 
 	# Set the cameras given the camera poses and centers
 	def set_cameras(self, camera_poses, centers=None, camera_distance=2.7, scale=None):
@@ -237,7 +225,6 @@ class UVProjection():
 		self.calculate_tex_gradient()
 		self.calculate_visible_triangle_mask()
 		_,_,_,cos_maps,_, _ = self.render_geometry()
-		_,_,_,cos_maps_app,_, _ = self.render_geometry_app()
 		self.calculate_cos_angle_weights(cos_maps)
 
 
@@ -276,40 +263,32 @@ class UVProjection():
 	# Bake screen-space cosine weights to UV space
 	# May be able to reimplement using the generic "bake_texture" function, but it works so leave it here for now
 	@torch.enable_grad()
-	def calculate_cos_angle_weights(self, cos_angles, fill=True, channels=None, cos_angles_app=None):
+	def calculate_cos_angle_weights(self, cos_angles, fill=True, channels=None):
 		if not channels:
 			channels = self.channels
-		
-		meshes = [self.mesh.clone(), self.mesh_app.clone()]
-		for j, tmp_mesh in enumerate(meshes):
-			cos_maps = []
-			for i in range(len(self.cameras)):
-				
-				zero_map = torch.zeros(self.target_size+(channels,), device=self.device, requires_grad=True)
-				optimizer = torch.optim.SGD([zero_map], lr=1, momentum=0)
-				optimizer.zero_grad()
-				zero_tex = TexturesUV([zero_map], self.mesh.textures.faces_uvs_padded(), self.mesh.textures.verts_uvs_padded(), sampling_mode=self.sampling_mode)
-				tmp_mesh.textures = zero_tex
+		cos_maps = []
+		tmp_mesh = self.mesh.clone()
+		for i in range(len(self.cameras)):
+			
+			zero_map = torch.zeros(self.target_size+(channels,), device=self.device, requires_grad=True)
+			optimizer = torch.optim.SGD([zero_map], lr=1, momentum=0)
+			optimizer.zero_grad()
+			zero_tex = TexturesUV([zero_map], self.mesh.textures.faces_uvs_padded(), self.mesh.textures.verts_uvs_padded(), sampling_mode=self.sampling_mode)
+			tmp_mesh.textures = zero_tex
 
-				images_predicted = self.renderer(tmp_mesh, cameras=self.cameras[i], lights=self.lights)
+			images_predicted = self.renderer(tmp_mesh, cameras=self.cameras[i], lights=self.lights)
 
-				if j == 0:
-					loss = torch.sum((cos_angles[i,:,:,0:1]**1 - images_predicted)**2)
-				else:
-					loss = torch.sum((cos_angles_app[i,:,:,0:1]**1 - images_predicted)**2)
-				loss.backward()
-				optimizer.step()
+			loss = torch.sum((cos_angles[i,:,:,0:1]**1 - images_predicted)**2)
+			loss.backward()
+			optimizer.step()
 
-				if fill:
-					zero_map = zero_map.detach() / (self.gradient_maps[i] + 1E-8)
-					zero_map = voronoi_solve(zero_map, self.gradient_maps[i][...,0])
-				else:
-					zero_map = zero_map.detach() / (self.gradient_maps[i]+1E-8)
-				cos_maps.append(zero_map)
-			if j == 0:
-				self.cos_maps = cos_maps
-			else: # j == 1
-				self.cos_maps_app = cos_maps
+			if fill:
+				zero_map = zero_map.detach() / (self.gradient_maps[i] + 1E-8)
+				zero_map = voronoi_solve(zero_map, self.gradient_maps[i][...,0])
+			else:
+				zero_map = zero_map.detach() / (self.gradient_maps[i]+1E-8)
+			cos_maps.append(zero_map)
+		self.cos_maps = cos_maps
 
 		
 	# Get geometric info from fragment shader
@@ -323,24 +302,6 @@ class UVProjection():
 		shader = self.renderer.shader
 		self.renderer.shader = HardGeometryShader(device=self.device, cameras=self.cameras[0], lights=self.lights)
 		tmp_mesh = self.mesh.clone()
-		
-		verts, normals, depths, cos_angles, texels, fragments = self.renderer(tmp_mesh.extend(len(self.cameras)), cameras=self.cameras, lights=self.lights)
-		self.renderer.shader = shader
-
-		if image_size:
-			self.renderer.rasterizer.raster_settings.image_size = size
-
-		return verts, normals, depths, cos_angles, texels, fragments
-	
-
-	@torch.no_grad()
-	def render_geometry_app(self, image_size=None):
-		if image_size:
-			size = self.renderer.rasterizer.raster_settings.image_size
-			self.renderer.rasterizer.raster_settings.image_size = image_size
-		shader = self.renderer.shader
-		self.renderer.shader = HardGeometryShader(device=self.device, cameras=self.cameras[0], lights=self.lights)
-		tmp_mesh = self.mesh_app.clone()
 		
 		verts, normals, depths, cos_angles, texels, fragments = self.renderer(tmp_mesh.extend(len(self.cameras)), cameras=self.cameras, lights=self.lights)
 		self.renderer.shader = shader
@@ -395,26 +356,22 @@ class UVProjection():
 	def calculate_tex_gradient(self, channels=None):
 		if not channels:
 			channels = self.channels
-		meshes = [self.mesh.clone(), self.mesh_app.clone()]
-		for tmp_mesh in meshes:
-			gradient_maps = []
-			for i in range(len(self.cameras)):
-				zero_map = torch.zeros(self.target_size+(channels,), device=self.device, requires_grad=True)
-				optimizer = torch.optim.SGD([zero_map], lr=1, momentum=0)
-				optimizer.zero_grad()
-				zero_tex = TexturesUV([zero_map], self.mesh.textures.faces_uvs_padded(), self.mesh.textures.verts_uvs_padded(), sampling_mode=self.sampling_mode)
-				tmp_mesh.textures = zero_tex
-				images_predicted = self.renderer(tmp_mesh, cameras=self.cameras[i], lights=self.lights)
-				loss = torch.sum((1 - images_predicted)**2)
-				loss.backward()
-				optimizer.step()
+		tmp_mesh = self.mesh.clone()
+		gradient_maps = []
+		for i in range(len(self.cameras)):
+			zero_map = torch.zeros(self.target_size+(channels,), device=self.device, requires_grad=True)
+			optimizer = torch.optim.SGD([zero_map], lr=1, momentum=0)
+			optimizer.zero_grad()
+			zero_tex = TexturesUV([zero_map], self.mesh.textures.faces_uvs_padded(), self.mesh.textures.verts_uvs_padded(), sampling_mode=self.sampling_mode)
+			tmp_mesh.textures = zero_tex
+			images_predicted = self.renderer(tmp_mesh, cameras=self.cameras[i], lights=self.lights)
+			loss = torch.sum((1 - images_predicted)**2)
+			loss.backward()
+			optimizer.step()
 
-				gradient_maps.append(zero_map.detach())
-			
-			if i == 0:
-				self.gradient_maps = gradient_maps
-			else: # i == 1:
-				self.gradient_maps.app = gradient_maps
+			gradient_maps.append(zero_map.detach())
+
+		self.gradient_maps = gradient_maps
 
 
 	# Get the UV space masks of triangles visible in each view
@@ -424,69 +381,59 @@ class UVProjection():
 		if not channels:
 			channels = self.channels
 
-		for j in range(2):
-			pix2face_list = []
-			for i in range(len(self.cameras)):
-				self.renderer.rasterizer.raster_settings.image_size=image_size
-				if j == 0:
-					pix2face = self.renderer.rasterizer(self.mesh_d, cameras=self.cameras[i]).pix_to_face
-				else:
-					pix2face = self.renderer.rasterizer(self.mesh_d_app, cameras=self.cameras[i]).pix_to_face
-				self.renderer.rasterizer.raster_settings.image_size=self.render_size
-				pix2face_list.append(pix2face)
+		pix2face_list = []
+		for i in range(len(self.cameras)):
+			self.renderer.rasterizer.raster_settings.image_size=image_size
+			pix2face = self.renderer.rasterizer(self.mesh_d, cameras=self.cameras[i]).pix_to_face
+			self.renderer.rasterizer.raster_settings.image_size=self.render_size
+			pix2face_list.append(pix2face)
 
-			if not hasattr(self, "mesh_uv"):
-				self.construct_uv_mesh()
+		if not hasattr(self, "mesh_uv"):
+			self.construct_uv_mesh()
 
-			raster_settings = RasterizationSettings(
-				image_size=self.target_size, 
-				blur_radius=0, 
-				faces_per_pixel=1,
-				perspective_correct=False,
-				cull_backfaces=False,
-				max_faces_per_bin=30000,
-				)
-
-			R, T = look_at_view_transform(dist=2, elev=0, azim=0)
-			cameras = FoVOrthographicCameras(device=self.device, R=R, T=T)
-
-			rasterizer=MeshRasterizer(
-				cameras=cameras, 
-				raster_settings=raster_settings
+		raster_settings = RasterizationSettings(
+			image_size=self.target_size, 
+			blur_radius=0, 
+			faces_per_pixel=1,
+			perspective_correct=False,
+			cull_backfaces=False,
+			max_faces_per_bin=30000,
 			)
-			if j == 0:
-				uv_pix2face = rasterizer(self.mesh_uv).pix_to_face
-			else:
-				uv_pix2face = rasterizer(self.mesh_uv_app).pix_to_face
 
-			visible_triangles = []
-			for i in range(len(pix2face_list)):
-				valid_faceid = torch.unique(pix2face_list[i])
-				valid_faceid = valid_faceid[1:] if valid_faceid[0]==-1 else valid_faceid
-				mask = torch.isin(uv_pix2face[0], valid_faceid, assume_unique=False)
-				# uv_pix2face[0][~mask] = -1
-				triangle_mask = torch.ones(self.target_size+(1,), device=self.device)
-				triangle_mask[~mask] = 0
-				
-				triangle_mask[:,1:][triangle_mask[:,:-1] > 0] = 1
-				triangle_mask[:,:-1][triangle_mask[:,1:] > 0] = 1
-				triangle_mask[1:,:][triangle_mask[:-1,:] > 0] = 1
-				triangle_mask[:-1,:][triangle_mask[1:,:] > 0] = 1
-				visible_triangles.append(triangle_mask)
+		R, T = look_at_view_transform(dist=2, elev=0, azim=0)
+		cameras = FoVOrthographicCameras(device=self.device, R=R, T=T)
 
-			if j == 0:
-				self.visible_triangles = visible_triangles
-			else:
-				self.visible_triangles_app = visible_triangles
+		rasterizer=MeshRasterizer(
+			cameras=cameras, 
+			raster_settings=raster_settings
+		)
+		uv_pix2face = rasterizer(self.mesh_uv).pix_to_face
+
+		visible_triangles = []
+		for i in range(len(pix2face_list)):
+			valid_faceid = torch.unique(pix2face_list[i])
+			valid_faceid = valid_faceid[1:] if valid_faceid[0]==-1 else valid_faceid
+			mask = torch.isin(uv_pix2face[0], valid_faceid, assume_unique=False)
+			# uv_pix2face[0][~mask] = -1
+			triangle_mask = torch.ones(self.target_size+(1,), device=self.device)
+			triangle_mask[~mask] = 0
+			
+			triangle_mask[:,1:][triangle_mask[:,:-1] > 0] = 1
+			triangle_mask[:,:-1][triangle_mask[:,1:] > 0] = 1
+			triangle_mask[1:,:][triangle_mask[:-1,:] > 0] = 1
+			triangle_mask[:-1,:][triangle_mask[1:,:] > 0] = 1
+			visible_triangles.append(triangle_mask)
+
+		self.visible_triangles = visible_triangles
 
 
 
-		# Render the current mesh and texture from current cameras
-		def render_textured_views(self):
-			meshes = self.mesh.extend(len(self.cameras))
-			images_predicted = self.renderer(meshes, cameras=self.cameras, lights=self.lights)
+	# Render the current mesh and texture from current cameras
+	def render_textured_views(self):
+		meshes = self.mesh.extend(len(self.cameras))
+		images_predicted = self.renderer(meshes, cameras=self.cameras, lights=self.lights)
 
-			return [image.permute(2, 0, 1) for image in images_predicted]
+		return [image.permute(2, 0, 1) for image in images_predicted]
 
 
 	# Bake views into a texture
