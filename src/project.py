@@ -194,13 +194,6 @@ class UVProjection():
 		self.set_texture_map(noise_texture)
 		return noise_texture
 
-	def load_texture_from_png(self, png_path):
-		image = Image.open(png_path).convert("RGB")
-		image_tensor = torch.tensor(np.array(image), dtype=torch.float32) / 255.0
-
-		texture_tensor = image_tensor.permute(2, 0, 1).to(self.device)
-		self.set_texture_map(texture_tensor)
-		return texture_tensor
 
 	# Set the cameras given the camera poses and centers
 	def set_cameras(self, camera_poses, centers=None, camera_distance=2.7, scale=None):

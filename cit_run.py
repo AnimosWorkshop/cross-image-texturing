@@ -125,6 +125,8 @@ result_tex_rgb, textured_views, v = model.pipe(
 
 	logging_config=logging_config,
 	cond_type=opt.cond_type,
+
+	app_transfer_model=model,
 	)
 
 display(v)

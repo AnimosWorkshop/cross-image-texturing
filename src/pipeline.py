@@ -191,6 +191,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			render_rgb_size=None,
 			texture_size=None,
 			texture_rgb_size=None,
+			texture_rgb_size_app=None,
 
 			max_batch_size=24,
 			logging_config=None,
@@ -238,6 +239,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			self.attention_mask.append([front_view_idx, cam_count])
 			self.attention_mask.append([back_view_idx, cam_count+1])
 
+		# TODO: check that self.attention_mask doesn't screw us up
+
 		# Reference view for attention (all views attend the the views in this list)
 		# A forward view will be used if not specified
 		if len(ref_views) == 0:
@@ -271,7 +274,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp_rgb.to("cpu")
 
 		# CIT - Now also configuring for appearance mesh
-		self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
+		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+		# self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
 		if mesh_path_app.lower().endswith(".obj"):
 			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
 		elif mesh_path_app.lower().endswith(".glb"):
@@ -349,6 +353,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		texture_size = 1536,
 		render_rgb_size=1024,
 		texture_rgb_size = 1024,
+		texture_rgb_size_app = 1024,
 		multiview_diffusion_end=0.8,
 		exp_start=0.0,
 		exp_end=6.0,
@@ -361,6 +366,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		logging_config=None,
 		cond_type="depth",
+
+		app_transfer_model=None,
 	):
 		
 
@@ -381,6 +388,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				render_rgb_size=render_rgb_size,
 				texture_size=texture_size,
 				texture_rgb_size=texture_rgb_size,
+				texture_rgb_size_app=texture_rgb_size_app,
 
 				max_batch_size=max_batch_size,
 
@@ -391,7 +399,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		if cross_attention_kwargs is None:
 			cross_attention_kwargs = {'perform_swap': True} 
 		elif type(cross_attention_kwargs) == dict:
-			cross_attention_kwargs['perform_swamp'] = True
+			cross_attention_kwargs['perform_swap'] = True
 		else:
 			raise(TypeError())
 		
@@ -517,15 +525,15 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
 		latents = composited_tensor.type(latents.dtype)
 		self.uvp.to("cpu")
+
 		# CIT
-		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
-		self.uvp_app.load_texture_from_png(tex_app_path)
-		# Need to encode + invert texture, use from CIA
 		app_views = self.uvp_app.render_textured_views()
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, latents_app, foregrounds_app, masks_app, timesteps[0]+1)
-		latents_app = composited_tensor_app.type(latents_app.dtype)
+		latents_app = torch.stack([invert_images(app_transfer_model, app_image=composited_tensor_app[i], struct_image=None, cfg=app_transfer_model.config, save=False) \
+							       for i in range(composited_tensor_app.shape[0])])
+		# TODO: No way this works because they won't have the same dimensions. Ask Dana?
 		self.uvp_app.to("cpu")
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
@@ -592,6 +600,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						down_block_res_samples_list = []
 						mid_block_res_sample_list = []
 
+						# CIT - modify batches
 						model_input_batches = [torch.stack((control_model_input[i], control_model_input[i], control_model_input_app[i])) for i in range(latents.shape[0])]
 						prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in controlnet_prompt_embeds]
 						conditioning_images_batches = [torch.stack((conditioning_images[i], conditioning_images[i], conditioning_images_app[i])) for i in range(conditioning_images.shape[0])]
@@ -662,6 +671,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 							return_dict=False,
 						)[0]
 						noise_pred_list.append(noise_pred)
+
+					# TODO: Make sure that the noise gets to the right place.
 
 					# noise_pred_list = [torch.index_select(noise_pred, dim=0, index=torch.tensor(meta[1], device=self._execution_device)) for noise_pred, meta in zip(noise_pred_list, self.group_metas)]
 					# noise_pred = torch.cat(noise_pred_list, dim=0)
