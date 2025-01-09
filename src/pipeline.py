@@ -36,7 +36,7 @@ from diffusers.models.attention_processor import Attention, AttentionProcessor
 from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-from src.SyncMVD.src.renderer.project import UVProjection as UVP
+from src.project import UVProjection as UVP
 
 
 from src.SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
@@ -245,7 +245,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# Calculate in-group attention mask
 		# self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
-
+		
 
 		# 2. Set up the UV mappings
 		# Set up pytorch3D for projection between screen space and UV space
@@ -259,6 +259,17 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
 
+		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
+
+		self.uvp_rgb = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+		self.uvp_rgb.mesh = self.uvp.mesh.clone()
+		self.uvp_rgb.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
+		_,_,_,cos_maps,_, _ = self.uvp_rgb.render_geometry()
+		self.uvp_rgb.calculate_cos_angle_weights(cos_maps, fill=False)
+
+		self.uvp.to("cpu")
+		self.uvp_rgb.to("cpu")
+
 		# CIT - Now also configuring for appearance mesh
 		self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
 		if mesh_path_app.lower().endswith(".obj"):
@@ -269,30 +280,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
 
-		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
-		self.uvp_rgb = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
-		self.uvp_rgb.mesh = self.uvp.mesh.clone()
-		self.uvp_rgb.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
-		_,_,_,cos_maps,_, _ = self.uvp_rgb.render_geometry()
-		self.uvp_rgb.calculate_cos_angle_weights(cos_maps, fill=False)
-
-		# CIT - Configure RGB mesh for appearance mesh
-		self.uvp_rgb_app = UVP(texture_size=texture_rgb_size, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
-		self.uvp_rgb_app.mesh = self.uvp.mesh.clone()
-		self.uvp_rgb_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
-		_,_,_,cos_maps,_, _ = self.uvp_rgb_app.render_geometry()
-		self.uvp_rgb_app.calculate_cos_angle_weights(cos_maps, fill=False)
-
+		self.uvp_app.to("cpu")
 
 		# Save some VRAM
 		del _, cos_maps
-		self.uvp.to("cpu")
-		self.uvp_rgb.to("cpu")
-		self.uvp_app.to("cpu")
-		self.uvp_rgb_app.to("cpu")
-
 
 		color_images = torch.FloatTensor([color_constants[name] for name in color_names]).reshape(-1,3,1,1).to(dtype=self.text_encoder.dtype, device=self._execution_device)
 		color_images = torch.ones(
@@ -524,54 +517,16 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
 		latents = composited_tensor.type(latents.dtype)
 		self.uvp.to("cpu")
-		# CIT - sneakily swap noise_views with the transfered views
+		# CIT
 		# TODO: Write the set_premade_texture(...) function to get texture from file and uncomment next line
 		self.uvp_app.load_texture_from_png(tex_app_path)
+		# Need to encode + invert texture, use from CIA
 		app_views = self.uvp_app.render_textured_views()
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, latents_app, foregrounds_app, masks_app, timesteps[0]+1)
 		latents_app = composited_tensor_app.type(latents_app.dtype)
 		self.uvp_app.to("cpu")
-
-		"""
-		# Configure CIA Model
-		cia_cfg = RunConfig()
-		cia_cfg.prompt = prompt
-		set_seed(cia_cfg.seed)
-		cia_model = AppearanceTransferModel(cia_cfg)
-		
-		# Perform appearance transfer
-		for i, (noise_view, app_view) in enumerate(zip(foregrounds, foregrounds_app)):
-			cia_model.enable_edit = False  # Deactivate the cross-image attention layers
-			latents_app, latents_struct, noise_app, noise_struct = invert_images(app_image=app_view,
-                                                                             struct_image=noise_view,
-                                                                             sd_model=cia_model.pipe,
-                                                                             cfg=cia_cfg)
-			cia_model.enable_edit = True
-			cia_model.set_latents(latents_app, latents_struct)
-			cia_model.set_noise(noise_app, noise_struct)
-			
-			init_latents, init_zs = get_init_latents_and_noises(model=cia_model, cfg=cia_cfg)
-			cia_model.pipe.scheduler.set_timesteps(cia_cfg.num_timesteps)
-			cia_model.enable_edit = True  # Activate our cross-image attention layers
-			start_step = min(cia_cfg.cross_attn_32_range.start, cia_cfg.cross_attn_64_range.start)
-			end_step = max(cia_cfg.cross_attn_32_range.end, cia_cfg.cross_attn_64_range.end)
-			foregrounds[i], foregrounds_app[i], _ = cia_model.pipe(
-				prompt=[cia_cfg.prompt] * 3,
-				latents=init_latents,
-				guidance_scale=1.0,
-				num_inference_steps=cia_cfg.num_timesteps,
-				swap_guidance_scale=cia_cfg.swap_guidance_scale,
-				callback=cia_model.get_adain_callback(),
-				eta=1,
-				zs=init_zs,
-				generator=torch.Generator('cuda').manual_seed(cia_cfg.seed),
-				cross_image_attention_range=Range(start=start_step, end=end_step),
-			).images
-		"""
-				
-		
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -620,6 +575,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					if prompt_tag == "positive" or not guess_mode:
 						# controlnet(s) inference
 						control_model_input = latent_model_input
+						control_model_input_app = latent_model_input_app
 						controlnet_prompt_embeds = prompt_embeds
 
 
@@ -636,8 +592,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						down_block_res_samples_list = []
 						mid_block_res_sample_list = []
 
-						model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
-						prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
+						model_input_batches = [torch.stack((control_model_input[i], control_model_input[i], control_model_input_app[i])) for i in range(latents.shape[0])]
+						prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in controlnet_prompt_embeds]
 						conditioning_images_batches = [torch.stack((conditioning_images[i], conditioning_images[i], conditioning_images_app[i])) for i in range(conditioning_images.shape[0])]
 
 						for model_input_batch ,prompt_embeds_batch, conditioning_images_batch \
@@ -683,7 +639,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 
 					'''
-					
 						predict the noise residual, split into mini-batches
 						Downblock res samples has n samples, we split each sample into m batches
 						and re group them into m lists of n mini batch samples.
@@ -691,16 +646,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					'''
 					noise_pred_list = []
 					# CIT - need to modify the batches so that they contain appearance latents
-					model_input_batches = [torch.stack((latents[i], latents[i], latents_app[i])) for i in range(latents.shape[0])]
+					model_input_batches = [torch.stack((latent_model_input[i], latent_model_input[i], latent_model_input_app[i])) for i in range(latents.shape[0])]
 					prompt_embeds_batches = [torch.stack((embed, embed, embed)) for embed in prompt_embeds]
 
 					for model_input_batch, prompt_embeds_batch, down_block_res_samples_batch, mid_block_res_sample_batch \
 						in zip(model_input_batches, prompt_embeds_batches, down_block_res_samples_list, mid_block_res_sample_list):
-						# All of these moved into note since AttentionTransferModel handled attention already
-						# if t > num_timesteps * (1- ref_attention_end):
-							# replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=1)
-						# else:
-							# replace_attention_processors(self.unet, SamplewiseAttnProcessor2_0, attention_mask=meta[2], ref_attention_mask=meta[3], ref_weight=0)
 
 						noise_pred = self.unet(
 							model_input_batch,
