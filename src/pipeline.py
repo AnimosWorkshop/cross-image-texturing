@@ -398,7 +398,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		if cross_attention_kwargs is None:
 			cross_attention_kwargs = {'perform_swap': True} 
 		elif type(cross_attention_kwargs) == dict:
-			cross_attention_kwargs['perform_swamp'] = True
+			cross_attention_kwargs['perform_swap'] = True
 		else:
 			raise(TypeError())
 		
@@ -520,7 +520,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		latent_tex = self.uvp.set_noise_texture()
 		noise_views = self.uvp.render_textured_views()
 		foregrounds = [view[:-1] for view in noise_views]
-		masks = [view[-1:] for view in noise_views]
+		masks = [view[-1:] for view in noise_views] # TODO how does it look like?
 		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
 		latents = composited_tensor.type(latents.dtype)
 		self.uvp.to("cpu")
