@@ -395,12 +395,18 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			)
 
 		# CIT - add kwarg
-		if cross_attention_kwargs is None:
-			cross_attention_kwargs = {'perform_swap': True} 
-		elif type(cross_attention_kwargs) == dict:
-			cross_attention_kwargs['perform_swap'] = True
-		else:
-			raise(TypeError())
+		def add_CIT_kwarg(cross_attention_kwargs):
+			'''
+				For CIT, we need to swap the attention processors
+				We need to set the cross_attention_kwargs to perform the swap
+			'''
+			if cross_attention_kwargs is None:
+				cross_attention_kwargs = {'perform_swap': True} 
+			elif type(cross_attention_kwargs) == dict:
+				cross_attention_kwargs['perform_swap'] = True
+			else:
+				raise(TypeError())
+		add_CIT_kwarg(cross_attention_kwargs)
 		
 		num_timesteps = self.scheduler.config.num_train_timesteps
 		initial_controlnet_conditioning_scale = controlnet_conditioning_scale
@@ -410,22 +416,28 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		controlnet = self.controlnet._orig_mod if is_compiled_module(self.controlnet) else self.controlnet
 
-		# align format for control guidance
-		if not isinstance(control_guidance_start, list) and isinstance(control_guidance_end, list):
-			control_guidance_start = len(control_guidance_end) * [control_guidance_start]
-		elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
-			control_guidance_end = len(control_guidance_start) * [control_guidance_end]
-		elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
-			# mult = len(controlnet.nets) if isinstance(controlnet, MultiControlNetModel) else 1
-			mult = 1
-			control_guidance_start, control_guidance_end = mult * [control_guidance_start], mult * [
-				control_guidance_end
-			]
+		def align_control_guidance(control_guidance_start, control_guidance_end):
+			# align format for control guidance
+			if not isinstance(control_guidance_start, list) and isinstance(control_guidance_end, list):
+				control_guidance_start = len(control_guidance_end) * [control_guidance_start]
+			elif not isinstance(control_guidance_end, list) and isinstance(control_guidance_start, list):
+				control_guidance_end = len(control_guidance_start) * [control_guidance_end]
+			elif not isinstance(control_guidance_start, list) and not isinstance(control_guidance_end, list):
+				# mult = len(controlnet.nets) if isinstance(controlnet, MultiControlNetModel) else 1
+				mult = 1
+				control_guidance_start, control_guidance_end = mult * [control_guidance_start], mult * [
+					control_guidance_end
+				]
+			return control_guidance_start, control_guidance_end
+		control_guidance_start, control_guidance_end = align_control_guidance(control_guidance_start, control_guidance_end)
 
 
 		# 0. Default height and width to unet
-		height = height or self.unet.config.sample_size * self.vae_scale_factor
-		width = width or self.unet.config.sample_size * self.vae_scale_factor
+		def get_default_height_width(height, width):
+			height = height or self.unet.config.sample_size * self.vae_scale_factor
+			width = width or self.unet.config.sample_size * self.vae_scale_factor
+			return height, width
+		height, width = get_default_height_width(height, width)
 
 
 		# 1. Check inputs. Raise error if not correct
@@ -488,20 +500,27 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		negative_prompt_embed_dict = dict(zip(direction_names, [emb for emb in negative_prompt_embeds]))
 
 		# (4. Prepare image) This pipeline use internal conditional images from Pytorch3D
-		self.uvp.to(self._execution_device)
-		conditioning_images, masks = get_conditioning_images(self.uvp, height, cond_type=cond_type)
-		conditioning_images = conditioning_images.type(prompt_embeds.dtype)
-		cond = (conditioning_images/2+0.5).permute(0,2,3,1).cpu().numpy()
-		cond = np.concatenate([img for img in cond], axis=1)
-		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
+		def prepare_struct_conds(uvp, save_cond=False, filename="cond.jpg"):      
+			uvp.to(self._execution_device)
+			conditioning_images, masks = get_conditioning_images(self.uvp, height, cond_type=cond_type)
+			conditioning_images = conditioning_images.type(prompt_embeds.dtype)
+			if save_cond:
+				cond = (conditioning_images/2+0.5).permute(0,2,3,1).cpu().numpy()
+				cond = np.concatenate([img for img in cond], axis=1)
+				numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/{filename}")
 
-		self.uvp_app.to(self._execution_device)
-		conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
-		conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
+			return conditioning_images, masks
+
+		conditioning_images, masks = prepare_struct_conds(self.uvp, True, "struct_cond.jpg")
+		conditioning_images_app, masks_app = prepare_struct_conds(self.uvp_app, True, "struct_cond_app.jpg")
 
 		# 5. Prepare timesteps
-		self.scheduler.set_timesteps(num_inference_steps, device=device)
-		timesteps = self.scheduler.timesteps
+		def prepare_timesteps():
+			self.scheduler.set_timesteps(num_inference_steps, device=device)
+			timesteps = self.scheduler.timesteps
+			return timesteps
+		
+		timesteps = prepare_timesteps()
 
 		# 6. Prepare latent variables
 		num_channels_latents = self.unet.config.in_channels
