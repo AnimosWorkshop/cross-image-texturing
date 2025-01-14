@@ -275,7 +275,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# CIT - Now also configuring for appearance mesh
 		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
-		# self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
+		#self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=3, device=self._execution_device)
 		if mesh_path_app.lower().endswith(".obj"):
 			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
 		elif mesh_path_app.lower().endswith(".glb"):
@@ -527,13 +527,18 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 
 		# CIT
+		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
 		app_views = self.uvp_app.render_textured_views()
+		#TODO: make sure the following line works and send to Dana
+		#tex = app_views[0].clone()
+		#texture_color = latent_preview(tex[None, ...])
+		#pt_to_pil(texture_color)[0].save(f"{self.intermediate_dir}/app_views.jpg")
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
-		composited_tensor_app = composite_rendered_view(self.scheduler, latents_app, foregrounds_app, masks_app, timesteps[0]+1)
-		latents_app = torch.stack([invert_images(app_transfer_model, app_image=composited_tensor_app[i], struct_image=None, cfg=app_transfer_model.config, save=False) \
+		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1)
+		#TODO: the following line doesn't work, talk to Dana
+		latents_app = torch.stack([invert_images(app_transfer_model.pipe, app_image=composited_tensor_app[i], struct_image=None, cfg=app_transfer_model.config) \
 							       for i in range(composited_tensor_app.shape[0])])
-		# TODO: No way this works because they won't have the same dimensions. Ask Dana?
 		self.uvp_app.to("cpu")
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline

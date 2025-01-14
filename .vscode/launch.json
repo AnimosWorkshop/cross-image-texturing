@@ -10,6 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/cit_run.py",
             "console": "integratedTerminal",
+            "justMyCode": false,
             "args": [
                 "--config",
                 "/home/ML_courses/03683533_2024/lidor_yael_snir/cross-image-texturing/src/SyncMVD/data/face/config.yaml"

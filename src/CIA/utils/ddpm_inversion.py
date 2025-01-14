@@ -22,7 +22,10 @@ def invert(x0, pipe, prompt_src="", num_diffusion_steps=100, cfg_scale_src=3.5, 
     #  zs - noise maps
     pipe.scheduler.set_timesteps(num_diffusion_steps)
     with inference_mode():
-        w0 = (pipe.vae.encode(x0).latent_dist.mode() * 0.18215).float()
+        tmp=pipe.vae
+        x0_tmp=x0.to(torch.float16)
+        tmp1=tmp.encode(x0_tmp)
+        w0 = (pipe.vae.encode(x0.to(torch.float16)).latent_dist.mode() * 0.18215).float()
     wt, zs, wts = inversion_forward_process(pipe, w0, etas=eta, prompt=prompt_src, cfg_scale=cfg_scale_src,
                                             prog_bar=True, num_inference_steps=num_diffusion_steps)
     return zs, wts

@@ -51,18 +51,27 @@ def load_noise(app_latent_save_path: Path, struct_latent_save_path: Path) -> Tup
 
 
 def invert_images(sd_model: AppearanceTransferModel, app_image: Image.Image, struct_image: Image.Image, cfg: RunConfig):
-    input_app = torch.from_numpy(np.array(app_image)).float() / 127.5 - 1.0
-    input_struct = torch.from_numpy(np.array(struct_image)).float() / 127.5 - 1.0
-    zs_app, latents_app = invert(x0=input_app.permute(2, 0, 1).unsqueeze(0).to('cuda'),
+    if torch.is_tensor(app_image):
+        input_app = app_image.float() / 127.5 - 1.0
+    else:
+        input_app = torch.from_numpy(np.array(app_image)).float() / 127.5 - 1.0
+    if struct_image is None:
+        input_struct =None
+    else:
+        input_struct = torch.from_numpy(np.array(struct_image)).float() / 127.5 - 1.0
+    zs_app, latents_app = invert(x0=input_app.unsqueeze(0),
                                  pipe=sd_model,
                                  prompt_src=cfg.prompt,
                                  num_diffusion_steps=cfg.num_timesteps,
                                  cfg_scale_src=3.5)
-    zs_struct, latents_struct = invert(x0=input_struct.permute(2, 0, 1).unsqueeze(0).to('cuda'),
+    if input_struct is None:
+        zs_struct, latents_struct = invert(x0=input_struct.permute(2, 0, 1).unsqueeze(0).to('cuda'),
                                        pipe=sd_model,
                                        prompt_src=cfg.prompt,
                                        num_diffusion_steps=cfg.num_timesteps,
                                        cfg_scale_src=3.5)
+    else:
+        zs_struct, latents_struct = None, None
     # Save the inverted latents and noises
     torch.save(latents_app, cfg.latents_path / f"{cfg.app_image_path.stem}.pt")
     torch.save(latents_struct, cfg.latents_path / f"{cfg.struct_image_path.stem}.pt")
