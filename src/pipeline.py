@@ -521,14 +521,15 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		latents_app = copy.deepcopy(latents)
 
 		latent_tex = self.uvp.set_noise_texture()
-		noise_views = self.uvp.render_textured_views()
-		foregrounds = [view[:-1] for view in noise_views]
-		masks = [view[-1:] for view in noise_views]
+		noise_views = self.uvp.render_textured_views() # list of 10 tensors, each got 5 channels, the last one is the mask (aka transparency aka alpha), and the other 4 are latent channels
+		foregrounds = [view[:-1] for view in noise_views] # here are the latent channels
+		masks = [view[-1:] for view in noise_views] # here is the 5th channel, the mask
 		composited_tensor = composite_rendered_view(self.scheduler, latents, foregrounds, masks, timesteps[0]+1)
 		latents = composited_tensor.type(latents.dtype)
 		self.uvp.to("cpu")
 
 		# CIT
+		# noise_backgrounds's shape is [10, 3, 1536, 1536]
 		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
 		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels! I assume that the 4th channel is Alpha (as in RGBA)
 		#TODO: make sure the following line works and send to Dana
@@ -537,7 +538,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		#pt_to_pil(texture_color)[0].save(f"{self.intermediate_dir}/app_views.jpg")
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
-		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1)
+		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
 		#TODO: the following line doesn't work, talk to Dana
 		latents_app = torch.stack([invert_images(app_transfer_model.pipe, app_image=composited_tensor_app[i], struct_image=None, cfg=app_transfer_model.config) \
 							       for i in range(composited_tensor_app.shape[0])])
