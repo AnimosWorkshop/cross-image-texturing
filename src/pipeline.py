@@ -275,7 +275,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# CIT - Now also configuring for appearance mesh
 		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
-		#self.uvp_app = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=3, device=self._execution_device)
 		if mesh_path_app.lower().endswith(".obj"):
 			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
 		elif mesh_path_app.lower().endswith(".glb"):
@@ -284,6 +283,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
 
+		texture_image = Image.open(tex_app_path)
+		texture_tensor = (torch.from_numpy(np.array(texture_image)).float() / 255.0).permute(2, 0, 1)
+		self.uvp_app.set_texture_map(texture_tensor)
 		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
 		self.uvp_app.to("cpu")
@@ -506,7 +508,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# 6. Prepare latent variables
 		num_channels_latents = self.unet.config.in_channels
-		latents = self.prepare_latents(
+		latents = self.prepare_latents( # [10,4,96,96]
 			batch_size,
 			num_channels_latents,
 			height,
@@ -528,7 +530,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# CIT
 		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
-		app_views = self.uvp_app.render_textured_views()
+		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels! I assume that the 4th channel is Alpha (as in RGBA)
 		#TODO: make sure the following line works and send to Dana
 		#tex = app_views[0].clone()
 		#texture_color = latent_preview(tex[None, ...])
@@ -775,9 +777,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						decoded_results = []
 						for latent_images in intermediate_results[-1]:
 							images = decode_latents(self.vae, latent_images.to(self._execution_device))
-
 							images = np.concatenate([img for img in images], axis=1)
-
 							decoded_results.append(images)
 						result_image = np.concatenate(decoded_results, axis=0)
 						numpy_to_pil(result_image)[0].save(f"{self.intermediate_dir}/step_{i:02d}.jpg")

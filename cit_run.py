@@ -11,6 +11,8 @@ from src.cit_configs import *
 from shutil import copy
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 
+# CIT TODO delete this line when we are done, it is used for debugging using the dbg console
+lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
@@ -19,14 +21,14 @@ opt = parse_config()
 
 if opt.mesh_config_relative:
 	mesh_path = join(dirname(opt.config), opt.mesh)
+	mesh_path_app = join(dirname(opt.config), opt.mesh_app)
+	tex_app = join(dirname(opt.config), opt.tex_app)
 else:
 	mesh_path = abspath(opt.mesh)
+	mesh_path_app = abspath(opt.mesh_app)
+	tex_app = abspath(opt.tex_app)
 
 # app = appearance
-if opt.mesh_config_relative:
-	mesh_path_app = join(dirname(opt.config), opt.mesh_app)
-else:
-	mesh_path_app = abspath(opt.mesh_app)
 
 if opt.output:
 	output_root = abspath(opt.output)
@@ -110,6 +112,7 @@ result_tex_rgb, textured_views, v = model.pipe(
     mesh_path_app=mesh_path_app,
 	mesh_transform_app={"scale":opt.mesh_scale},
 	mesh_autouv_app=not opt.keep_mesh_uv,
+	tex_app_path=tex_app,
 
 	camera_azims=opt.camera_azims,
 	top_cameras=not opt.no_top_cameras,
