@@ -52,13 +52,13 @@ def load_noise(app_latent_save_path: Path, struct_latent_save_path: Path) -> Tup
 
 def invert_images(sd_model: AppearanceTransferModel, app_image: Image.Image, struct_image: Image.Image, cfg: RunConfig):
     if torch.is_tensor(app_image):
-        input_app = app_image.float() / 127.5 - 1.0
+        input_app = app_image.to(torch.float16) / 127.5 - 1.0
     else:
-        input_app = torch.from_numpy(np.array(app_image)).float() / 127.5 - 1.0
+        input_app = torch.from_numpy(np.array(app_image)).to(torch.float16) / 127.5 - 1.0
     if struct_image is None:
         input_struct =None
     else:
-        input_struct = torch.from_numpy(np.array(struct_image)).float() / 127.5 - 1.0
+        input_struct = torch.from_numpy(np.array(struct_image)).to(torch.float16) / 127.5 - 1.0
     zs_app, latents_app = invert(x0=input_app.unsqueeze(0),
                                  pipe=sd_model,
                                  prompt_src=cfg.prompt,

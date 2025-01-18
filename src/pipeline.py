@@ -284,7 +284,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
 
 		texture_image = Image.open(tex_app_path)
-		texture_tensor = (torch.from_numpy(np.array(texture_image)).float() / 255.0).permute(2, 0, 1)
+		texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
 		self.uvp_app.set_texture_map(texture_tensor)
 		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 

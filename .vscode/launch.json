@@ -21,6 +21,22 @@
                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
             }
+        },
+        {
+            "name": "Invertion for Dana",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/invertion_for_dana.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+            ],
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT" : "6000",
+                "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+                "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+                "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+            }
         }
     ]
 }

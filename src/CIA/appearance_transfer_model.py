@@ -21,7 +21,7 @@ class AppearanceTransferModel:
     # Note how .pipe is defineded to be from CrossImageAttentionDiffusionPipeline.
     def __init__(self, config: RunConfig, pipe: Optional[CrossImageAttentionStableDiffusionPipeline] = None):
         self.config = config
-        self.pipe = get_stable_diffusion_model() if pipe is None else pipe
+        self.pipe = get_stable_diffusion_model() if pipe is None else pipe # this is the pipeline that is used for inversion
         self.register_attention_control()
         self.segmentor = Segmentor(prompt=config.prompt, object_nouns=[config.object_noun])
         self.latents_app, self.latents_struct = None, None

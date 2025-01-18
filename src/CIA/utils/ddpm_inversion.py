@@ -25,7 +25,7 @@ def invert(x0, pipe, prompt_src="", num_diffusion_steps=100, cfg_scale_src=3.5, 
         tmp=pipe.vae
         x0_tmp=x0.to(torch.float16)
         tmp1=tmp.encode(x0_tmp)
-        w0 = (pipe.vae.encode(x0.to(torch.float16)).latent_dist.mode() * 0.18215).float()
+        w0 = (pipe.vae.encode(x0.to(torch.float16)).latent_dist.mode() * 0.18215).to(torch.float16)
     wt, zs, wts = inversion_forward_process(pipe, w0, etas=eta, prompt=prompt_src, cfg_scale=cfg_scale_src,
                                             prog_bar=True, num_inference_steps=num_diffusion_steps)
     return zs, wts
@@ -68,6 +68,7 @@ def inversion_forward_process(model, x0,
             xt = xts[idx][None]
 
         with torch.no_grad():
+            xt = xt.to(torch.float16)
             out = model.unet.forward(xt, timestep=t, encoder_hidden_states=uncond_embedding)
             if not prompt == "":
                 cond_out = model.unet.forward(xt, timestep=t, encoder_hidden_states=text_embeddings)
