@@ -276,7 +276,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp_rgb.to("cpu")
 
 		# CIT - Now also configuring for appearance mesh
-		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=render_rgb_size, sampling_mode="nearest", channels=3, device=self._execution_device)
+		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=512, sampling_mode="nearest", channels=3, device=self._execution_device)
 		if mesh_path_app.lower().endswith(".obj"):
 			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
 		elif mesh_path_app.lower().endswith(".glb"):
@@ -522,7 +522,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			generator,
 			None,
 		)
-		latents_app = copy.deepcopy(latents)
 
 		latent_tex = self.uvp.set_noise_texture()
 		noise_views = self.uvp.render_textured_views() # list of 10 tensors, each got 5 channels, the last one is the mask (aka transparency aka alpha), and the other 4 are latent channels
@@ -533,24 +532,16 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 
 		# CIT
-		# noise_backgrounds's shape is [10, 3, 1536, 1536]
-		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
+		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
 		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
-		# CIT - we save appearance intermediates to load for CIA to import with its own functions
-		for i, view in enumerate(composited_tensor_app):
-			img = view.permute(1, 2, 0).cpu().numpy()
-			img = numpy_to_pil(img)
-			img[0].save(f"{self.result_dir}/view_{i}.png")
-			del(img)
-		# CIT - preparing appearance latents
 		latents_app = []
 		for i in range(len(self.camera_poses)):
-			img = load_size(f"{self.result_dir}/view_{i}.png")
-			image_tensor = torch.from_numpy(img).permute(2, 0, 1).to("cuda:0") 
-			latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, struct_image=None, cfg=app_transfer_model.config)[0])
+			image_tensor = composited_tensor_app[i]
+			# First index here is to grab the correct variable, second is to get the first(?) timestep
+			latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, struct_image=None, cfg=app_transfer_model.config)[0][0])
 		#TODO: the following line doesn't work, talk to Dana
 		latents_app = torch.stack(latents_app)
 		torch.save(latents_app, f"{self.result_dir}/latents_app.pt")
