@@ -10,7 +10,6 @@ import copy
 from torch import functional as F
 from torch import nn
 from torchvision.transforms import Compose, Resize, GaussianBlur, InterpolationMode
-
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, DDIMScheduler, UniPCMultistepScheduler
 from diffusers.models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
@@ -169,7 +168,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		self.scheduler = DDPMScheduler.from_config(self.scheduler.config)
 		#yael:chainging to the exact like CIA
-		#self.scheduler = DDIMScheduler.from_config("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
+		self.scheduler = DDIMScheduler.from_config("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
 		self.model_cpu_offload_seq = "vae->text_encoder->unet->vae"
 		self.enable_model_cpu_offload()
 		self.enable_vae_slicing()
@@ -286,7 +285,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
 
 		texture_image = Image.open(tex_app_path)
-		texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
+		#yael\:tray without this
+		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
+		#texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
 		self.uvp_app.set_texture_map(texture_tensor)
 		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
@@ -535,9 +536,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
 		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels! I assume that the 4th channel is Alpha (as in RGBA)
 		#TODO: make sure the following line works and send to Dana
-		#tex = app_views[0].clone()
-		#texture_color = latent_preview(tex[None, ...])
-		#pt_to_pil(texture_color)[0].save(f"{self.intermediate_dir}/app_views.jpg")
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
