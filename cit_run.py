@@ -82,7 +82,9 @@ syncmvd = StableSyncMVDPipeline(**pipe.components)
 model_cfg = RunConfig(opt.prompt)
 set_seed(model_cfg.seed)
 model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
-
+#yael: this  tow lines are e pach with onother pach need to make it in a beter way becuse most likly will be problems in the future
+model.config.latents_path = Path(model.config.output_path) / "latents"
+model.config.latents_path.mkdir(parents=True, exist_ok=True)
 
 # Run the SyncMVD pipeline
 

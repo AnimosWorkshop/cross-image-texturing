@@ -4,7 +4,7 @@ from diffusers.training_utils import set_seed
 import numpy as np
 import torch
 from PIL import Image
-
+from pathlib import Path
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from src.cit_configs import RunConfig
 from src.pipeline import StableSyncMVDPipeline
@@ -57,6 +57,8 @@ syncmvd = StableSyncMVDPipeline(**pipe.components)
 model_cfg = RunConfig("Portrait photo of Kratos, god of war.")
 set_seed(model_cfg.seed)
 model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
+model.config.latents_path = Path(model.config.output_path) / "latents"
+model.config.latents_path.mkdir(parents=True, exist_ok=True)
 # invert_images(path_of_photo_for_invertion)
 
 # image = Image.open(path_of_photo_for_invertion).convert("RGB")

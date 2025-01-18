@@ -168,6 +168,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		)
 
 		self.scheduler = DDPMScheduler.from_config(self.scheduler.config)
+		#yael:chainging to the exact like CIA
+		#self.scheduler = DDIMScheduler.from_config("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
 		self.model_cpu_offload_seq = "vae->text_encoder->unet->vae"
 		self.enable_model_cpu_offload()
 		self.enable_vae_slicing()

@@ -51,7 +51,9 @@ def load_noise(app_latent_save_path: Path, struct_latent_save_path: Path) -> Tup
 
 
 def invert_images(sd_model: AppearanceTransferModel, app_image: Image.Image, struct_image: Image.Image, cfg: RunConfig):
-    if torch.is_tensor(app_image):
+    if app_image is None:
+        input_app =None
+    elif torch.is_tensor(app_image):
         input_app = app_image.to(torch.float16) / 127.5 - 1.0
     else:
         input_app = torch.from_numpy(np.array(app_image)).to(torch.float16) / 127.5 - 1.0
@@ -59,24 +61,47 @@ def invert_images(sd_model: AppearanceTransferModel, app_image: Image.Image, str
         input_struct =None
     else:
         input_struct = torch.from_numpy(np.array(struct_image)).to(torch.float16) / 127.5 - 1.0
-    zs_app, latents_app = invert(x0=input_app.unsqueeze(0),
+    if input_app is None:
+        zs_app, latents_app = None, None
+    else:
+        zs_app, latents_app = invert(x0=input_app.unsqueeze(0),
                                  pipe=sd_model,
                                  prompt_src=cfg.prompt,
                                  num_diffusion_steps=cfg.num_timesteps,
                                  cfg_scale_src=3.5)
     if input_struct is None:
+        zs_struct, latents_struct = None, None
+    else:
         zs_struct, latents_struct = invert(x0=input_struct.permute(2, 0, 1).unsqueeze(0).to('cuda'),
                                        pipe=sd_model,
                                        prompt_src=cfg.prompt,
                                        num_diffusion_steps=cfg.num_timesteps,
                                        cfg_scale_src=3.5)
-    else:
-        zs_struct, latents_struct = None, None
     # Save the inverted latents and noises
-    torch.save(latents_app, cfg.latents_path / f"{cfg.app_image_path.stem}.pt")
-    torch.save(latents_struct, cfg.latents_path / f"{cfg.struct_image_path.stem}.pt")
-    torch.save(zs_app, cfg.latents_path / f"{cfg.app_image_path.stem}_ddpm_noise.pt")
-    torch.save(zs_struct, cfg.latents_path / f"{cfg.struct_image_path.stem}_ddpm_noise.pt")
+    #yael:all the ifs are for a pach that most likly need to chaing
+    if isinstance(cfg.struct_image_path,str):
+        if cfg.struct_image_path =="":
+            torch.save(latents_struct, cfg.latents_path / "a.pt")
+        else:
+            torch.save(latents_struct, cfg.latents_path / f"{cfg.struct_image_path}.pt")
+    else:
+        torch.save(latents_struct, cfg.latents_path / f"{cfg.struct_image_path.stem}.pt")
+    if isinstance(cfg.struct_image_path,str):
+        if cfg.struct_image_path =="":
+            torch.save(zs_app, cfg.latents_path / "b.pt")
+        else:
+            torch.save(zs_app, cfg.latents_path / f"{cfg.app_image_path}_ddpm_noise.pt")
+    else:
+        torch.save(zs_app, cfg.latents_path / f"{cfg.app_image_path.stem}_ddpm_noise.pt")
+    if isinstance(cfg.struct_image_path,str):
+        if cfg.struct_image_path =="":
+            torch.save(zs_struct, cfg.latents_path / "c.pt")
+        else:
+            torch.save(zs_struct, cfg.latents_path / f"{cfg.struct_image_path}_ddpm_noise.pt")
+    else:
+        torch.save(zs_struct, cfg.latents_path / f"{cfg.struct_image_path.stem}_ddpm_noise.pt")
+    
+    
     return latents_app, latents_struct, zs_app, zs_struct
 
 
