@@ -47,6 +47,7 @@ from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from src.cit_configs import Range, RunConfig
 from src.CIA.utils.latent_utils import invert_images
 from src.CIA.utils.latent_utils import get_init_latents_and_noises
+from src.CIA.utils.image_utils import load_size
 
 
 if torch.cuda.is_available():
@@ -534,14 +535,25 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# CIT
 		# noise_backgrounds's shape is [10, 3, 1536, 1536]
 		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras),3,render_rgb_size, render_rgb_size) , device=self._execution_device)
-		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels! I assume that the 4th channel is Alpha (as in RGBA)
-		#TODO: make sure the following line works and send to Dana
+		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
 		foregrounds_app = [view[:-1] for view in app_views]
 		masks_app = [view[-1:] for view in app_views]
 		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
+		# CIT - we save appearance intermediates to load for CIA to import with its own functions
+		for i, view in enumerate(composited_tensor_app):
+			img = view.permute(1, 2, 0).cpu().numpy()
+			img = numpy_to_pil(img)
+			img[0].save(f"{self.result_dir}/view_{i}.png")
+			del(img)
+		# CIT - preparing appearance latents
+		latents_app = []
+		for i in range(len(self.camera_poses)):
+			img = load_size(f"{self.result_dir}/view_{i}.png")
+			image_tensor = torch.from_numpy(img).permute(2, 0, 1).to("cuda:0") 
+			latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, struct_image=None, cfg=app_transfer_model.config)[0])
 		#TODO: the following line doesn't work, talk to Dana
-		latents_app = torch.stack([invert_images(app_transfer_model.pipe, app_image=composited_tensor_app[i], struct_image=None, cfg=app_transfer_model.config) \
-							       for i in range(composited_tensor_app.shape[0])])
+		latents_app = torch.stack(latents_app)
+		torch.save(latents_app, f"{self.result_dir}/latents_app.pt")
 		self.uvp_app.to("cpu")
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
