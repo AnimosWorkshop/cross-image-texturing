@@ -45,9 +45,7 @@ from src.SyncMVD.src.utils import *
 
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from src.cit_configs import Range, RunConfig
-from src.CIA.utils.latent_utils import invert_images
-from src.CIA.utils.latent_utils import get_init_latents_and_noises
-from src.CIA.utils.image_utils import load_size
+from src.cit_utils import invert_images
 
 
 if torch.cuda.is_available():
@@ -190,6 +188,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			top_cameras=True,
 			ref_views=[],
 			latent_size=None,
+			latents_load=False,
 			render_rgb_size=None,
 			texture_size=None,
 			texture_rgb_size=None,
@@ -275,24 +274,25 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 		self.uvp_rgb.to("cpu")
 
-		# CIT - Now also configuring for appearance mesh
-		self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=512, sampling_mode="nearest", channels=3, device=self._execution_device)
-		if mesh_path_app.lower().endswith(".obj"):
-			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
-		elif mesh_path_app.lower().endswith(".glb"):
-			mesh_autouv_app = False
-			self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
-		else:
-			assert False, "The mesh file format is not supported. Use .obj or .glb."
+		if not latents_load:
+			# CIT - Now also configuring for appearance mesh
+			self.uvp_app = UVP(texture_size=texture_rgb_size_app, render_size=512, sampling_mode="nearest", channels=3, device=self._execution_device)
+			if mesh_path_app.lower().endswith(".obj"):
+				self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
+			elif mesh_path_app.lower().endswith(".glb"):
+				mesh_autouv_app = False
+				self.uvp_app.load_mesh(mesh_path_app, scale_factor=mesh_transform_app["scale"] or 1, autouv=mesh_autouv_app)
+			else:
+				assert False, "The mesh file format is not supported. Use .obj or .glb."
 
-		texture_image = Image.open(tex_app_path)
-		#yael\:tray without this
-		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
-		#texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
-		self.uvp_app.set_texture_map(texture_tensor)
-		self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
+			texture_image = Image.open(tex_app_path)
+			#yael\:tray without this
+			texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
+			#texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
+			self.uvp_app.set_texture_map(texture_tensor)
+			self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
-		self.uvp_app.to("cpu")
+			self.uvp_app.to("cpu")
 
 		# Save some VRAM
 		del _, cos_maps
@@ -351,7 +351,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		mesh_path_app: str = None,
 		mesh_transform_app: dict = None,
 		mesh_autouv_app = False,
-		tex_app_path=None,
+
+		latents_save_path: str = None,
+		latents_load:bool = False,
 
 		camera_azims=None,
 		camera_centers=None,
@@ -376,6 +378,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		app_transfer_model=None,
 	):
 		
+		if latents_load:
+			assert os.path.isfile(latents_save_path)
+		
 
 		# Setup pipeline settings
 		self.initialize_pipeline(
@@ -385,12 +390,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				mesh_path_app=mesh_path_app,
 				mesh_transform_app=mesh_transform_app,
 				mesh_autouv_app=mesh_autouv_app,
-				tex_app_path=tex_app_path,
 				camera_azims=camera_azims,
 				camera_centers=camera_centers,
 				top_cameras=top_cameras,
 				ref_views=[],
 				latent_size=height//8,
+				latents_load=latents_load,
 				render_rgb_size=render_rgb_size,
 				texture_size=texture_size,
 				texture_rgb_size=texture_rgb_size,
@@ -502,9 +507,10 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		cond = np.concatenate([img for img in cond], axis=1)
 		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
 
-		self.uvp_app.to(self._execution_device)
-		conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
-		conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
+		if not latents_load:
+			self.uvp_app.to(self._execution_device)
+			conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
+			conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
 
 		# 5. Prepare timesteps
 		self.scheduler.set_timesteps(num_inference_steps, device=device)
@@ -532,20 +538,23 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		self.uvp.to("cpu")
 
 		# CIT
-		noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
-		app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
-		foregrounds_app = [view[:-1] for view in app_views]
-		masks_app = [view[-1:] for view in app_views]
-		composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
-		latents_app = []
-		for i in range(len(self.camera_poses)):
-			image_tensor = composited_tensor_app[i]
-			# First index here is to grab the correct variable, second is to get the first(?) timestep
-			latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, struct_image=None, cfg=app_transfer_model.config)[0][0])
-		#TODO: the following line doesn't work, talk to Dana
-		latents_app = torch.stack(latents_app)
-		torch.save(latents_app, f"{self.result_dir}/latents_app.pt")
-		self.uvp_app.to("cpu")
+		if not latents_load:
+			noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
+			app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
+			foregrounds_app = [view[:-1] for view in app_views]
+			masks_app = [view[-1:] for view in app_views]
+			composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
+			latents_app = []
+			for i in range(len(self.camera_poses)):
+				image_tensor = composited_tensor_app[i]
+				# First index here is to grab the correct variable, second is to get the first(?) timestep
+				latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, cfg=app_transfer_model.config)[0][0])
+			#TODO: the following line doesn't work, talk to Dana
+			latents_app = torch.stack(latents_app)
+			torch.save(latents_app, latents_save_path)
+			self.uvp_app.to("cpu")
+		else:
+			latents_app = torch.load(latents_save_path)
 
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
