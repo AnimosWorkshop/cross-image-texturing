@@ -559,7 +559,13 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, cfg=app_transfer_model.config)[0][0])
 			latents_app = torch.stack(latents_app)
 			torch.save(latents_app, latents_save_path)
-			self.uvp_app.to("cpu")
+			# Cleanup
+			del(noise_backgrounds)
+			del(app_views)
+			del(foregrounds_app)
+			del(masks_spp)
+			del(composited_tensor_app)
+			del(self.uvp_app)
 		else:
 			latents_app = torch.load(latents_save_path)
 
