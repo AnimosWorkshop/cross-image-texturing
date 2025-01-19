@@ -13,4 +13,4 @@
 #SBATCH --mem-per-cpu=20G
 
 python cit_run.py \
-    --config /home/ML_courses/03683533_2024/lidor_yael_snir/cross-image-texturing/src/SyncMVD/data/face/config.yaml
+    --config /home/ML_courses/03683533_2024/lidor_yael_snir/cross-image-texturing/data/config.yaml
