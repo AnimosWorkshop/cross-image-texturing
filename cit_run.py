@@ -11,8 +11,6 @@ from src.cit_configs import *
 from shutil import copy
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 
-# CIT TODO delete this line when we are done, it is used for debugging using the dbg console
-lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
