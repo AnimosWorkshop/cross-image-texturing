@@ -13,7 +13,7 @@
             "justMyCode": false,
             "args": [
                 "--config",
-                "${workspaceFolder}/data/face/config.yaml"
+                "${workspaceFolder}/data/config.yaml"
             ],
             "env": {
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT" : "6000",
