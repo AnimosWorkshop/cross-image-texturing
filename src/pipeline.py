@@ -285,11 +285,13 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			else:
 				assert False, "The mesh file format is not supported. Use .obj or .glb."
 
+			"""
 			texture_image = Image.open(tex_app_path)
-			#yael\:tray without this
+			#yael\:try without this
 			texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
 			#texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
 			self.uvp_app.set_texture_map(texture_tensor)
+			"""
 			self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
 			self.uvp_app.to("cpu")
@@ -352,8 +354,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		mesh_transform_app: dict = None,
 		mesh_autouv_app = False,
 
+		latents_load: bool = False,
 		latents_save_path: str = None,
-		latents_load:bool = False,
+		cond_app_path: str=None,
 
 		camera_azims=None,
 		camera_centers=None,
@@ -379,7 +382,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 	):
 		
 		if latents_load:
-			assert os.path.isfile(latents_save_path)
+			if (not os.path.isfile(latents_save_path)) or (not os.path.isfile(cond_app_path)):
+				latents_load = False
 		
 
 		# Setup pipeline settings
@@ -511,6 +515,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			self.uvp_app.to(self._execution_device)
 			conditioning_images_app, masks_app = get_conditioning_images(self.uvp_app, height, cond_type=cond_type)
 			conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
+			torch.save(conditioning_images_app, cond_app_path)
+		else:
+			conditioning_images_app = torch.load(cond_app_path)
 
 		# 5. Prepare timesteps
 		self.scheduler.set_timesteps(num_inference_steps, device=device)
@@ -605,6 +612,10 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						control_model_input = latent_model_input
 						control_model_input_app = latent_model_input_app
 						controlnet_prompt_embeds = prompt_embeds
+
+						print(control_model_input.shape)
+						print(control_model_input_app.shape)
+						print(controlnet_prompt_embeds.shape)
 
 
 						if isinstance(controlnet_keep[i], list):

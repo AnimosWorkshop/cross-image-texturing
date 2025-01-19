@@ -3,7 +3,7 @@
 #SBATCH --job-name=MergedMVD
 #SBATCH --output=Merged.out
 #SBATCH --error=Merged.err
-#SBATCH --partition=studentkillable
+#SBATCH --partition=killable
 #SBATCH --account=gpu-research
 #SBATCH --time=10:00:00
 #SBATCH --signal=USR1@120

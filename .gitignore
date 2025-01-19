@@ -1,3 +1,5 @@
 *.jpg
 src/__pycache__/*
 data/MVD_*
+*.err
+*.out

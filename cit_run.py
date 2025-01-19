@@ -113,8 +113,9 @@ result_tex_rgb, textured_views, v = model.pipe(
 	mesh_transform_app={"scale":opt.mesh_scale},
 	mesh_autouv_app=not opt.keep_mesh_uv,
 	
-	latents_save_path="./data/latents_app.pt",
 	latents_load=True,
+	latents_save_path="./data/latents_app.pt",
+	cond_app_path="./data/cond_app.pt",
 
 	camera_azims=opt.camera_azims,
 	top_cameras=not opt.no_top_cameras,
