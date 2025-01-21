@@ -1,5 +1,5 @@
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
-from diffusers import DDPMScheduler
+from diffusers import DDIMScheduler
 from diffusers.training_utils import set_seed
 import numpy as np
 import torch
@@ -45,53 +45,58 @@ def load_size(image_path,
     return image
 
 
-def save_step_callback(step, timestep, latents):
-    # Decode latents to image
-    print("hi")
-    images = pipe.decode_latents(latents)
-    for i, img in enumerate(images):
-        pil_image = Image.fromarray((img * 255).astype("uint8"))
-        pil_image.save(f"step_{step:03d}_image_{i}.png")
+# def save_step_callback(step, timestep, latents):
+#     # Decode latents to image
+#     print("hi")
+#     images = pipe.decode_latents(latents)
+#     for i, img in enumerate(images):
+#         pil_image = Image.fromarray((img * 255).astype("uint8"))
+#         pil_image.save(f"step_{step:03d}_image_{i}.png")
 
-
-path_of_photo_for_invertion = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg"
-path_of_condition_photo = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg"
-input_image_prompt = "Portrait photo of Kratos, god of war."
-
-
-
-condition_photo = load_size(path_of_condition_photo)
-
-controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11f1p_sd15_depth", variant="fp16", torch_dtype=torch.float16)	
-pipe = StableDiffusionControlNetPipeline.from_pretrained(
-		"runwayml/stable-diffusion-v1-5",
-        controlnet=controlnet, 
-        torch_dtype=torch.float16,
-        callback=save_step_callback,
-        callback_steps=1  # Call the callback at every step
-	)
-pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
+def main():
+    path_of_photo_for_invertion = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg"
+    path_of_condition_photo = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg"
+    input_image_prompt = "Portrait photo of Kratos, god of war."
 
 
 
-syncmvd = StableSyncMVDPipeline(**pipe.components)
 
-model_cfg = RunConfig(input_image_prompt)
-set_seed(69)
-model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
-model.config.latents_path = Path(model.config.output_path) / "latents"
-model.config.latents_path.mkdir(parents=True, exist_ok=True)
+    controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11f1p_sd15_depth", torch_dtype=torch.float32)	
+    pipe = StableDiffusionControlNetPipeline.from_pretrained(
+            "runwayml/stable-diffusion-v1-5",
+            controlnet=controlnet, 
+            torch_dtype=torch.float32,
+            # callback=save_step_callback,
+            # callback_steps=1  # Call the callback at every step
+        )
+    # pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
+    # pipe.scheduler = DDIMScheduler.from_config("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
+    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    # pipe.scheduler.prediction_type = "sample"
 
-image = load_size(path_of_photo_for_invertion)
-image_tensor = torch.from_numpy(image).permute(2, 0, 1).to("cuda:0") 
+
+    # syncmvd = StableSyncMVDPipeline(**pipe.components)
+
+    model_cfg = RunConfig(input_image_prompt)
+    set_seed(69)
+    # model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
+    # model.config.latents_path = Path(model.config.output_path) / "latents"
+    # model.config.latents_path.mkdir(parents=True, exist_ok=True)
+
+    image = load_size(path_of_photo_for_invertion)
+    image_tensor = torch.from_numpy(image).permute(2, 0, 1).to("cuda:0") 
+    condition_photo = load_size(path_of_condition_photo)
 
 
-inverted_latents, _, _, _ = invert_images(model.pipe, image_tensor, struct_image=None, cfg=model.config)
-inverted_latents = torch.load(lidor_dir + "/inverted_latents.pt")
+    inverted_latents, _, _, _ = invert_images(pipe.to("cuda:0"), image_tensor, struct_image=None, cfg=model_cfg)
+    # inverted_latents = torch.load(lidor_dir + "/inverted_latents.pt")
 
-pipe.safety_checker = lambda images, clip_input: (images, [False]*len(images))
-res = pipe(input_image_prompt, image = [condition_photo], latents=inverted_latents[-1][None].to(torch.float16), num_inference_steps=model.config.num_timesteps, guidance_scale=model.config.swap_guidance_scale)
-image = res.images[0]  # Assuming res.images[0] is in the format expected
-image.save("reconstructed.png")
+    pipe.safety_checker = lambda images, clip_input: (images, [False]*len(images))
+    res = pipe(input_image_prompt, image = [condition_photo], latents=inverted_latents[-1][None].to(torch.float16), num_inference_steps=model_cfg.num_timesteps, guidance_scale=model_cfg.swap_guidance_scale)
+    image = res.images[0]  # Assuming res.images[0] is in the format expected
+    image.save("reconstructed.png")
 
-print("yeah")
+    print("yeah")
+    
+if __name__ == "__main__":
+    main()
