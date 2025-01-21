@@ -1,0 +1,13 @@
+mesh: "./sneaker.glb"
+mesh_app: "./textured.obj"
+tex_app: "./textured.png"
+mtl_app: "./textured.mtl"
+mesh_config_relative: True    # mesh is placed relative to the config file
+use_mesh_name: False
+prompt: "A photo of a camouflage military boot."
+steps: 30
+cond_type: "depth"
+seed: 2
+mesh_scale: 1
+tex_fast_preview: True
+view_fast_preview: True
