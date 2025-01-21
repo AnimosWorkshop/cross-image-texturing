@@ -578,7 +578,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
    
 		# CIT DBG - TODO remove this
 		show_latents(latents_app, self.vae, self.intermediate_dir)
-		exit(0)
+		# exit(0)
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
