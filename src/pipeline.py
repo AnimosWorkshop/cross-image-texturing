@@ -44,7 +44,7 @@ from src.SyncMVD.src.utils import *
 
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from src.cit_configs import Range, RunConfig
-from src.cit_utils import invert_images, step_tex
+from src.cit_utils import invert_images, show_latents, step_tex, show_views, save_all_views
 
 from datetime import datetime
 
@@ -259,7 +259,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		if mesh_path.lower().endswith(".obj"):
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		elif mesh_path.lower().endswith(".glb"):
-			mesh_autouv=False
+			# mesh_autouv=False
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
@@ -286,13 +286,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			else:
 				assert False, "The mesh file format is not supported. Use .obj or .glb."
 
-			"""
+			
 			texture_image = Image.open(tex_app_path)
-			#yael\:try without this
 			texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
-			#texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
+			# texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
 			self.uvp_app.set_texture_map(texture_tensor)
-			"""
+			
 			self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
 
 			self.uvp_app.to("cpu")
@@ -354,6 +353,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		mesh_path_app: str = None,
 		mesh_transform_app: dict = None,
 		mesh_autouv_app = False,
+		tex_app_path=None,
 
 		latents_load: bool = False,
 		latents_save_path: str = None,
@@ -395,6 +395,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				mesh_path_app=mesh_path_app,
 				mesh_transform_app=mesh_transform_app,
 				mesh_autouv_app=mesh_autouv_app,
+				tex_app_path=tex_app_path,
 				camera_azims=camera_azims,
 				camera_centers=camera_centers,
 				top_cameras=top_cameras,
@@ -509,6 +510,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		conditioning_images, masks = get_conditioning_images(self.uvp, height, cond_type=cond_type)
 		conditioning_images = conditioning_images.type(prompt_embeds.dtype)
 		cond = (conditioning_images/2+0.5).permute(0,2,3,1).cpu().numpy()
+		numpy_to_pil(cond[0])[0].save(f"{self.intermediate_dir}/first_cond.jpg")
 		cond = np.concatenate([img for img in cond], axis=1)
 		numpy_to_pil(cond)[0].save(f"{self.intermediate_dir}/cond.jpg")
 
@@ -549,6 +551,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		if not latents_load:
 			noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
 			app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
+   
+			# CIT DBG - TODO remove this
+			show_views(app_views, self.intermediate_dir)
+			save_all_views(app_views, self.intermediate_dir)
+   
 			foregrounds_app = [view[:-1] for view in app_views]
 			masks_app = [view[-1:] for view in app_views]
 			composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
@@ -568,7 +575,10 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			del(self.uvp_app)
 		else:
 			latents_app = torch.load(latents_save_path)
-
+   
+		# CIT DBG - TODO remove this
+		show_latents(latents_app, self.vae, self.intermediate_dir)
+		exit(0)
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 

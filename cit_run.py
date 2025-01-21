@@ -104,12 +104,13 @@ result_tex_rgb, textured_views, v = model.pipe(
 	mesh_path=mesh_path,
 	mesh_transform={"scale":opt.mesh_scale},
 	mesh_autouv=not opt.keep_mesh_uv,
-	
+	tex_app_path=tex_app,	
+ 
     mesh_path_app=mesh_path_app,
 	mesh_transform_app={"scale":opt.mesh_scale},
 	mesh_autouv_app=not opt.keep_mesh_uv,
 	
-	latents_load=True,
+	latents_load=False, # TODO change to True
 	latents_save_path="./data/latents_app.pt",
 	cond_app_path="./data/cond_app.pt",
 
