@@ -5,10 +5,13 @@ import numpy as np
 import torch
 from PIL import Image
 from pathlib import Path
+# from src.cit_utils import show_latent, show_latents, lidor_dir
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from src.cit_configs import RunConfig
 from src.pipeline import StableSyncMVDPipeline
 from src.CIA.utils.latent_utils import invert_images
+
+lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
 def load_size(image_path,
               left: int = 0,
@@ -42,33 +45,53 @@ def load_size(image_path,
     return image
 
 
+def save_step_callback(step, timestep, latents):
+    # Decode latents to image
+    print("hi")
+    images = pipe.decode_latents(latents)
+    for i, img in enumerate(images):
+        pil_image = Image.fromarray((img * 255).astype("uint8"))
+        pil_image.save(f"step_{step:03d}_image_{i}.png")
 
-path_of_photo_for_invertion = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/show_views_at15Jan2025-152223.jpg"
 
+path_of_photo_for_invertion = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg"
+path_of_condition_photo = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg"
+input_image_prompt = "Portrait photo of Kratos, god of war."
+
+
+
+condition_photo = load_size(path_of_condition_photo)
 
 controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11f1p_sd15_depth", variant="fp16", torch_dtype=torch.float16)	
 pipe = StableDiffusionControlNetPipeline.from_pretrained(
-		"runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float16
+		"runwayml/stable-diffusion-v1-5",
+        controlnet=controlnet, 
+        torch_dtype=torch.float16,
+        callback=save_step_callback,
+        callback_steps=1  # Call the callback at every step
 	)
 pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 
+
+
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
-model_cfg = RunConfig("Portrait photo of Kratos, god of war.")
-set_seed(model_cfg.seed)
+model_cfg = RunConfig(input_image_prompt)
+set_seed(69)
 model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 model.config.latents_path = Path(model.config.output_path) / "latents"
 model.config.latents_path.mkdir(parents=True, exist_ok=True)
-# invert_images(path_of_photo_for_invertion)
-
-# image = Image.open(path_of_photo_for_invertion).convert("RGB")
-
-# image_array = np.array(image).astype(np.float32)
-# image_array = image_array / 127.5 - 1.0
-# # photo_tensor.shape == [1, 3, 1536, 1536]
 
 image = load_size(path_of_photo_for_invertion)
 image_tensor = torch.from_numpy(image).permute(2, 0, 1).to("cuda:0") 
 
 
-inverted = invert_images(model.pipe, image_tensor, struct_image=None, cfg=model.config)
+inverted_latents, _, _, _ = invert_images(model.pipe, image_tensor, struct_image=None, cfg=model.config)
+inverted_latents = torch.load(lidor_dir + "/inverted_latents.pt")
+
+pipe.safety_checker = lambda images, clip_input: (images, [False]*len(images))
+res = pipe(input_image_prompt, image = [condition_photo], latents=inverted_latents[-1][None].to(torch.float16), num_inference_steps=model.config.num_timesteps, guidance_scale=model.config.swap_guidance_scale)
+image = res.images[0]  # Assuming res.images[0] is in the format expected
+image.save("reconstructed.png")
+
+print("yeah")
