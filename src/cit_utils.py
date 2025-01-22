@@ -2,7 +2,7 @@ from datetime import datetime
 import numpy as np
 from diffusers.utils import numpy_to_pil, randn_tensor
 import torch
-from src.SyncMVD.src.utils import decode_latents, get_rgb_texture, latent_preview
+from src.SyncMVD.src.utils import decode_latents, get_rgb_texture
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from PIL import Image
 from src.cit_configs import RunConfig
@@ -12,6 +12,25 @@ from src.CIA.utils.ddpm_inversion import invert
 ##################################
 ######### CIT_utils.py ###########
 ##################################
+
+# A fast decoding method based on linear projection of latents to rgb
+@torch.no_grad()
+def latent_preview(x):
+	# adapted from https://discuss.huggingface.co/t/decoding-latents-to-rgb-without-upscaling/23204/7
+	v1_4_latent_rgb_factors = torch.tensor([
+		#   R        G        B
+		[0.298, 0.207, 0.208],  # L1
+		[0.187, 0.286, 0.173],  # L2
+		[-0.158, 0.189, 0.264],  # L3
+		[-0.184, -0.271, -0.473],  # L4
+	], dtype=x.dtype, device=x.device)
+	image = x.permute(0, 2, 3, 1) @ v1_4_latent_rgb_factors
+	image = (image / 2 + 0.5).clamp(0, 1)
+	image = image.float()
+	image = image.cpu()
+	image = image.numpy()
+	return image
+
 
 def load_size(image_path,
               left: int = 0,
@@ -200,7 +219,7 @@ from src.SyncMVD.src.utils import decode_latents
 
 lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
-def show_views(views, dest_dir): # Working!
+def show_views(views, dest_dir=lidor_dir): # Working!
 	result_images = []
 	for view in views:
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
@@ -209,16 +228,27 @@ def show_views(views, dest_dir): # Working!
 	concatenated_image = np.concatenate(result_images, axis=1)
 	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_views_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
  
-def save_all_views(views, dest_dir):
+def save_all_views(views, dest_dir=lidor_dir):
 	for i, view in enumerate(views):
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
 		numpy_to_pil(rgb_image)[0].save(f"{dest_dir}/face_view_{i}.jpg")
  
-def show_mesh(uvp, dest_dir):
+def show_mesh(uvp, dest_dir=lidor_dir):
 	views = uvp.render_textured_views()
 	show_views(views, dest_dir)
  
-def show_latents(latents, vae, dest_dir):
-	decoded_latents = decode_latents(vae, latents.to(torch.float16))
+def show_latents(latents, vae, dest_dir=lidor_dir):
+	"""
+	Latents can be a tensor of shape (N, L) or (L,), or path.
+	"""
+	if isinstance(latents, str):
+		latents = torch.load(latents)
+ 
+	if (len(latents.shape) == 3):
+		latents = latents.unsqueeze(0)
+
+	vae = vae.to(torch.float16).to("cuda:0")
+	latents = latents.to(torch.float16).to("cuda:0")
+	decoded_latents = latent_preview(latents)
 	concatenated_image = np.concatenate(decoded_latents, axis=1)
-	numpy_to_pil(decoded_latents)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")

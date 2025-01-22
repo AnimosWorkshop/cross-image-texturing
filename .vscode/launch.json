@@ -5,6 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin/python",
+            "env": {
+                "CONDA_SHLVL": "1",
+                "CONDA_DEFAULT_ENV": "lys",
+                "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+                "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+                "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+                "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+                "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+            }
+        },
+        {
             "name": "Python Debugger: cit_run.py with Config",
             "type": "debugpy",
             "request": "launch",
@@ -16,6 +35,9 @@
                 "${workspaceFolder}/data/config.yaml"
             ],
             "env": {
+                "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+                "CONDA_DEFAULT_ENV": "lys",
+                "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT" : "6000",
                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
@@ -32,6 +54,28 @@
             "args": [
             ],
             "env": {
+                "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+                "CONDA_DEFAULT_ENV": "lys",
+                "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT" : "6000",
+                "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+                "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+                "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+            }
+        },
+        {
+            "name": "invert_all.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/invert_all.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+            ],
+            "env": {
+                "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+                "CONDA_DEFAULT_ENV": "lys",
+                "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT" : "6000",
                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
