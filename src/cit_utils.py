@@ -109,55 +109,30 @@ def step_tex(
 		eta=None,
 		is_app=False
 ):
-	t = timestep
+	step_results = scheduler.step(
+        model_output=model_output,
+        timestep=timestep,
+        sample=sample,
+        eta=eta,
+        generator=generator,
+        return_dict=return_dict,
+    )
+	pred_prev_sample = step_results['prev_sample']
+	pred_original_sample = step_results['pred_original_sample']
 
-	# CIT - No variance dependence as we use DDIM.
-
-	# 1. compute alphas, betas
-	alpha_prod_t = scheduler.alphas_cumprod[t]
-	alpha_prod_t_prev = scheduler.alphas_cumprod[prev_t] if prev_t >= 0 else scheduler.one
-	beta_prod_t = 1 - alpha_prod_t
-	beta_prod_t_prev = 1 - alpha_prod_t_prev
-	current_alpha_t = alpha_prod_t / alpha_prod_t_prev
-	current_beta_t = 1 - current_alpha_t
-
-	# 2. compute predicted original sample from predicted noise also called
-	# "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
-	if scheduler.config.prediction_type == "epsilon":
-		pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
-	elif scheduler.config.prediction_type == "sample":
-		pred_original_sample = model_output
-	elif scheduler.config.prediction_type == "v_prediction":
-		pred_original_sample = (alpha_prod_t**0.5) * sample - (beta_prod_t**0.5) * model_output
-	else:
-		raise ValueError(
-			f"prediction_type given as {scheduler.config.prediction_type} must be one of `epsilon`, `sample` or"
-			" `v_prediction`  for the DDPMScheduler."
-		)
-
-	# 3. Clip or threshold "predicted x_0"
-	if scheduler.config.thresholding:
-		pred_original_sample = scheduler._threshold_sample(pred_original_sample)
-	elif scheduler.config.clip_sample:
-		pred_original_sample = pred_original_sample.clamp(
-			-scheduler.config.clip_sample_range, scheduler.config.clip_sample_range
-		)
-
-	# 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
-	# See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-	pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
-	current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
-
-	'''
-		Add multidiffusion here
-	'''
-
+	# Step texture
 	if not is_app:
+		prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
+		alpha_prod_t = scheduler.alphas_cumprod[timestep]
+		alpha_prod_t_prev = scheduler.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else scheduler.final_alpha_cumprod
+		beta_prod_t = 1 - alpha_prod_t
+		variance = scheduler._get_variance(timestep, prev_timestep)
+		std_dev_t = eta * variance ** (0.5)
+
 		if texture is None:
 			sample_views = [view for view in sample]
 			sample_views, texture, _ = uvp.bake_texture(views=sample_views, main_views=main_views, exp=exp)
 			sample_views = torch.stack(sample_views, axis=0)[:,:-1,...]
-
 
 		original_views = [view for view in pred_original_sample]
 		original_views, original_tex, visibility_weights = uvp.bake_texture(views=original_views, main_views=main_views, exp=exp)
@@ -165,33 +140,9 @@ def step_tex(
 		original_views = uvp.render_textured_views()
 		original_views = torch.stack(original_views, axis=0)[:,:-1,...]
 
-	# 5. Compute predicted previous sample µ_t
-	# See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-	# pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
-	if not is_app:
-		prev_tex = pred_original_sample_coeff * original_tex + current_sample_coeff * texture
-
-	# 6. Don't add noise
-	variance = 0
-	variance_tex = None
-
-	if t > 0:
-		device = texture.device
-		"""
-		variance_noise = randn_tensor(
-			texture.shape, generator=generator, device=device, dtype=texture.dtype
-		)
-		if scheduler.variance_type == "fixed_small_log":
-			variance = scheduler._get_variance(t, predicted_variance=variance_tex) * variance_noise
-		elif scheduler.variance_type == "learned_range":
-			variance = scheduler._get_variance(t, predicted_variance=variance_tex)
-			variance = torch.exp(0.5 * variance) * variance_noise
-		else:
-			variance = (scheduler._get_variance(t, predicted_variance=variance_tex) ** 0.5) * variance_noise
-		"""
-
-	if not is_app:
-		prev_tex = prev_tex + variance
+		pred_tex_epsilon = (texture - alpha_prod_t ** (0.5) * original_tex) / beta_prod_t ** (0.5)
+		pred_tex_direction = (1 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * pred_tex_epsilon
+		prev_tex = alpha_prod_t_prev ** (0.5) * original_tex + pred_tex_direction
 
 	if not is_app:
 		uvp.set_texture_map(prev_tex)
