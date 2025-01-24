@@ -1,5 +1,6 @@
 *.jpg
 src/__pycache__/*
 data/MVD_*
+src/SyncMVD/data/*
 *.err
 *.out
