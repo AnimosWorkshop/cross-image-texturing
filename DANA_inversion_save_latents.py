@@ -121,10 +121,17 @@ class Preprocess(nn.Module):
         return imgs
 
     def load_img(self, image_path):
-        image_pil = T.Resize(512)(Image.open(image_path).convert("RGB"))
-        # blur image
-        # blurred_image = image_pil.filter(ImageFilter.GaussianBlur(radius=9))
-        # blurred_image.save('very_blurred_image.png')
+        # image_pil = T.Resize(512)(Image.open(image_path).convert("RGB"))
+        # # blur image
+        # # blurred_image = image_pil.filter(ImageFilter.GaussianBlur(radius=9))
+        # # blurred_image.save('very_blurred_image.png')
+        # image = T.ToTensor()(image_pil).unsqueeze(0).to(self.device)
+        # return image
+        
+        return self.prepare_image(Image.open(image_path).convert("RGB"))
+    
+    def prepare_image(self, image):
+        image_pil = T.Resize(512)(image)
         image = T.ToTensor()(image_pil).unsqueeze(0).to(self.device)
         return image
 
@@ -137,7 +144,7 @@ class Preprocess(nn.Module):
         return latents
 
     @torch.no_grad()
-    def ddim_inversion(self, cond, latent, save_path, save_latents=True,
+    def ddim_inversion(self, cond, latent, save_path='', save_latents=True,
                                 timesteps_to_save=None):
         timesteps = reversed(self.scheduler.timesteps)
         with torch.autocast(device_type='cuda', dtype=torch.float32):
@@ -163,6 +170,35 @@ class Preprocess(nn.Module):
                     torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
         torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
         return latent
+
+    # @torch.no_grad()
+    # def ddim_controlnet_inversion(self, cond, latent, save_path, save_latents=True,
+    #                             timesteps_to_save=None):
+    #     timesteps = reversed(self.scheduler.timesteps)
+    #     with torch.autocast(device_type='cuda', dtype=torch.float32):
+    #         for i, t in enumerate(tqdm(timesteps)):
+    #             cond_batch = cond.repeat(latent.shape[0], 1, 1)
+
+    #             alpha_prod_t = self.scheduler.alphas_cumprod[t]
+    #             alpha_prod_t_prev = (
+    #                 self.scheduler.alphas_cumprod[timesteps[i - 1]]
+    #                 if i > 0 else self.scheduler.final_alpha_cumprod
+    #             )
+
+    #             mu = alpha_prod_t ** 0.5
+    #             mu_prev = alpha_prod_t_prev ** 0.5
+    #             sigma = (1 - alpha_prod_t) ** 0.5
+    #             sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
+                
+    #             eps = self.unet(latent, t, encoder_hidden_states=cond_batch).sample
+                    
+    #             pred_x0 = (latent - sigma_prev * eps) / mu_prev
+    #             latent = mu * pred_x0 + sigma * eps
+    #             if save_latents:
+    #                 torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+    #     torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+    #     return latent
+
 
     @torch.no_grad()
     def ddim_sample(self, x, cond, save_path, save_latents=False, timesteps_to_save=None):
@@ -193,21 +229,51 @@ class Preprocess(nn.Module):
     @torch.no_grad()
     def extract_latents(self, num_steps, data_path, save_path, timesteps_to_save,
                         inversion_prompt='', extract_reverse=False):
-        self.scheduler.set_timesteps(num_steps)
+        # self.scheduler.set_timesteps(num_steps)
 
+        # cond = self.get_text_embeds(inversion_prompt, "")[1].unsqueeze(0)
+        # image = self.load_img(data_path)
+
+        
+        # latent = self.encode_imgs(image)
+
+        # inverted_x = self.inversion_func(cond, latent, save_path, save_latents=not extract_reverse,
+        #                                  timesteps_to_save=timesteps_to_save)
+
+        inverted_x = self.invert_latents_from_path(num_steps, data_path, save_path, timesteps_to_save, inversion_prompt, extract_reverse)
+        latent_reconstruction = self.ddim_sample_wrapper(inverted_x, inversion_prompt, save_path, save_latents=extract_reverse,
+                                                 timesteps_to_save=timesteps_to_save)
+        rgb_reconstruction = self.decode_latents(latent_reconstruction)
+
+        return rgb_reconstruction  # , latent_reconstruction
+    
+
+    @torch.no_grad()
+    def ddim_sample_wrapper(self, x, inversion_prompt, save_path, save_latents=False, timesteps_to_save=None):
         cond = self.get_text_embeds(inversion_prompt, "")[1].unsqueeze(0)
+        return self.ddim_sample(x, cond, save_path, save_latents=save_latents, timesteps_to_save=timesteps_to_save)
+        
+    
+    @torch.no_grad()
+    def invert_latents_from_path(self, num_steps, data_path, save_path, timesteps_to_save,
+                        inversion_prompt='', extract_reverse=False):
         image = self.load_img(data_path)
-
+        inverted_x = self.invert_latents(num_steps, image, save_path, timesteps_to_save, inversion_prompt, extract_reverse)
+        
+    
+    @torch.no_grad()
+    def invert_latents(self, num_steps, image, timesteps_to_save=None, 
+                        inversion_prompt='',save_path='', extract_reverse=False):
+        self.scheduler.set_timesteps(num_steps)
+        cond = self.get_text_embeds(inversion_prompt, "")[1].unsqueeze(0)
         
         latent = self.encode_imgs(image)
 
         inverted_x = self.inversion_func(cond, latent, save_path, save_latents=not extract_reverse,
                                          timesteps_to_save=timesteps_to_save)
-        latent_reconstruction = self.ddim_sample(inverted_x, cond, save_path, save_latents=extract_reverse,
-                                                 timesteps_to_save=timesteps_to_save)
-        rgb_reconstruction = self.decode_latents(latent_reconstruction)
+        
+        return inverted_x
 
-        return rgb_reconstruction  # , latent_reconstruction
 
 def run(opt):
     # timesteps to save
