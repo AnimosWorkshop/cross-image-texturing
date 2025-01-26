@@ -147,6 +147,7 @@ class Preprocess(nn.Module):
     def ddim_inversion(self, cond, latent, save_path='', save_latents=True,
                                 timesteps_to_save=None):
         timesteps = reversed(self.scheduler.timesteps)
+        midproccess_latents = [] # used only if save_latents is True
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
                 cond_batch = cond.repeat(latent.shape[0], 1, 1)
@@ -167,9 +168,21 @@ class Preprocess(nn.Module):
                 pred_x0 = (latent - sigma_prev * eps) / mu_prev
                 latent = mu * pred_x0 + sigma * eps
                 if save_latents:
-                    torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+                    # torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+                    midproccess_latents.append(latent[0])
+                    
+        if save_latents:
+            midproccess_latents = torch.stack(midproccess_latents)
+            torch.save(midproccess_latents, os.path.join(save_path, f'midproccess_latents.pt'))
         torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+        return latent, midproccess_latents
+    
+    @torch.no_grad()
+    def ddim_invertion_without_midproccess(self, cond, latent, save_path='', save_latents=True,
+                                timesteps_to_save=None):
+        latent, _ = self.ddim_inversion(cond, latent, save_path, save_latents, timesteps_to_save)
         return latent
+    
 
     # @torch.no_grad()
     # def ddim_controlnet_inversion(self, cond, latent, save_path, save_latents=True,
