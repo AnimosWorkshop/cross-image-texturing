@@ -219,6 +219,12 @@ from src.SyncMVD.src.utils import decode_latents
 
 lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
+def image_to_tensor(image):
+    return (torch.from_numpy(np.array(image)) / 255.0).permute(2, 0, 1)
+
+def tensor_to_image(tensor):
+    return Image.fromarray((tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
+
 def show_views(views, dest_dir=lidor_dir): # Working!
 	result_images = []
 	for view in views:
