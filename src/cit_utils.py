@@ -243,7 +243,7 @@ def show_mesh(uvp, dest_dir=lidor_dir):
 	views = uvp.render_textured_views()
 	show_views(views, dest_dir)
  
-def show_latents(latents, vae, dest_dir=lidor_dir):
+def show_latents(latents, dest_dir=lidor_dir):
 	"""
 	Latents can be a tensor of shape (N, L) or (L,), or path.
 	"""
@@ -253,7 +253,6 @@ def show_latents(latents, vae, dest_dir=lidor_dir):
 	if (len(latents.shape) == 3):
 		latents = latents.unsqueeze(0)
 
-	vae = vae.to(torch.float16).to("cuda:0")
 	latents = latents.to(torch.float16).to("cuda:0")
 	decoded_latents = latent_preview(latents)
 	concatenated_image = np.concatenate(decoded_latents, axis=1)
