@@ -3,6 +3,7 @@ import os
 
 cmd = f'''
 python inversion_save_latents.py \
+    --cond_image_path /home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg \
     --data_path /home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg \
     --save_dir /home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/dana/{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')} \
     --sd_version 1.5 \

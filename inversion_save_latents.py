@@ -75,11 +75,16 @@ class Preprocess(nn.Module):
             #                                                 torch_dtype=torch.float16).to(self.device)
             # self.scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
         else:
-            from diffusers import StableDiffusionPipeline
-            pipe = StableDiffusionPipeline.from_pretrained(
+            from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
+            controlnet = ControlNetModel.from_pretrained(
+                "lllyasviel/sd-controlnet-depth", torch_dtype=torch.float16
+            )
+            pipe = StableDiffusionControlNetPipeline.from_pretrained(
                 "runwayml/stable-diffusion-v1-5",
+                controlnet=controlnet,
                 torch_dtype=torch.float16,
                 use_safetensors=True,
+                safety_checker=None,
                 device = device)
             self.vae = pipe.vae.to(device)
             self.unet = pipe.unet.to(device)
@@ -87,6 +92,8 @@ class Preprocess(nn.Module):
             self.scheduler = pipe.scheduler
             self.tokenizer = pipe.tokenizer
             self.device = device
+            self.controlnet = pipe.controlnet.to(device)
+            self.pipeline = pipe
 
 
             # self.vae = AutoencoderKL.from_pretrained(model_key, subfolder="vae", revision="fp16",
@@ -99,7 +106,7 @@ class Preprocess(nn.Module):
             # self.scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
         print(f'[INFO] loaded stable diffusion!')
 
-        self.inversion_func = self.ddim_inversion
+        self.inversion_func = self.cn_ddim_inversion
 
     @torch.no_grad()
     def get_text_embeds(self, prompt, negative_prompt):
@@ -136,13 +143,63 @@ class Preprocess(nn.Module):
             latents = posterior.mean * 0.18215
         return latents
 
+    # def prepare_image_for_cn(self, image, width, height, batch_size, num_images_per_prompt, device, dtype):
+        
+
     @torch.no_grad()
-    def ddim_inversion(self, cond, latent, save_path, save_latents=True,
+    def step_with_cn(self, cond_image, cond_batch, latent, t):
+        # CIT - we now use the controlnet to generate the residuals                
+        latent_model_input = torch.cat([latent] * 2)
+        control_model_input = latent_model_input
+
+        control_model_cond_image_input = self.pipeline.prepare_image(
+                image=cond_image,
+                width=None,
+                height=None,
+                batch_size=1,
+                num_images_per_prompt=1,
+                device=self.device,
+                dtype=torch.float16,
+            )
+        
+        
+        down_block_res_samples, mid_block_res_sample = self.controlnet( #TODO initialize self.controlnet in __init__
+            control_model_input,
+            t,
+            encoder_hidden_states=cond_batch,
+            controlnet_cond=control_model_cond_image_input,
+            conditioning_scale=1, # we don't support negative prompts
+            guess_mode=False, 
+            return_dict=False,
+        )
+        
+        # CIT - passing the cn residuals to the unet
+        #TODO bug: unet is called several times (wtf) latent_model_input.shape[0] is changed from 2 to 4 somehow, and the bug is that eps results in a tensor with shape[0] = 4 which is incompatible with the rest of the module.
+        eps = self.unet(
+            latent_model_input,
+            t,
+            encoder_hidden_states=cond_batch,
+            # cross_attention_kwargs=cross_attention_kwargs, #TODO might just be None
+            down_block_additional_residuals=down_block_res_samples,
+            mid_block_additional_residual=mid_block_res_sample,
+            return_dict=False,
+        )[0]
+        
+        return eps
+
+
+    @torch.no_grad()
+    def cn_ddim_inversion(self, cond_image, cond_embeds, latent, save_path, save_latents=True,
                                 timesteps_to_save=None):
+        """
+        cond_image: image to condition on. should be PIL image
+        cond_embeds: text embeddings that result from self.get_text_embeds
+        latent: encoded latents of the image to invert
+        """
         timesteps = reversed(self.scheduler.timesteps)
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
-                cond_batch = cond.repeat(latent.shape[0], 1, 1)
+                cond_batch = cond_embeds.repeat(latent.shape[0], 1, 1)
 
                 alpha_prod_t = self.scheduler.alphas_cumprod[t]
                 alpha_prod_t_prev = (
@@ -155,31 +212,7 @@ class Preprocess(nn.Module):
                 sigma = (1 - alpha_prod_t) ** 0.5
                 sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
                 
-                ### TODO provide the unet with CN output
-                latent_model_input = torch.cat([latent] * 2)
-                control_model_input = latent_model_input
-
-                down_block_res_samples, mid_block_res_sample = self.controlnet( #TODO initialize self.controlnet in __init__
-                    control_model_input,
-                    t,
-                    encoder_hidden_states=cond_batch,
-                    controlnet_cond=image, # TODO take this as input
-                    conditioning_scale=cond_scale, #TODO figure this out.
-                    guess_mode=False, 
-                    return_dict=False,
-                )
-                
-                
-                
-                eps = self.unet(
-                    latent,
-                    t,
-                    encoder_hidden_states=cond_batch
-                    # cross_attention_kwargs=cross_attention_kwargs, #TODO might just be None
-                    down_block_additional_residuals=down_block_res_samples,
-                    mid_block_additional_residual=mid_block_res_sample,
-                )[0] # that is how it goes on SDwCN pipe
-                    # ).sample
+                eps = self.step_with_cn(cond_image, cond_batch, latent, t)                    
                     
                 pred_x0 = (latent - sigma_prev * eps) / mu_prev
                 latent = mu * pred_x0 + sigma * eps
@@ -189,11 +222,11 @@ class Preprocess(nn.Module):
         return latent
 
     @torch.no_grad()
-    def ddim_sample(self, x, cond, save_path, save_latents=False, timesteps_to_save=None):
+    def ddim_sample(self, x, cond_image, cond_embeds, save_path, save_latents=False, timesteps_to_save=None):
         timesteps = self.scheduler.timesteps
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
-                    cond_batch = cond.repeat(x.shape[0], 1, 1)
+                    cond_batch = cond_embeds.repeat(x.shape[0], 1, 1)
                     alpha_prod_t = self.scheduler.alphas_cumprod[t]
                     alpha_prod_t_prev = (
                         self.scheduler.alphas_cumprod[timesteps[i + 1]]
@@ -205,7 +238,8 @@ class Preprocess(nn.Module):
                     mu_prev = alpha_prod_t_prev ** 0.5
                     sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
 
-                    eps = self.unet(x, t, encoder_hidden_states=cond_batch).sample
+                    # eps = self.unet(x, t, encoder_hidden_states=cond_batch).sample
+                    eps = self.step_with_cn(cond_image, cond_batch, x, t)                    
 
                     pred_x0 = (x - sigma * eps) / mu
                     x = mu_prev * pred_x0 + sigma_prev * eps
@@ -215,19 +249,22 @@ class Preprocess(nn.Module):
         return x
 
     @torch.no_grad()
-    def extract_latents(self, num_steps, data_path, save_path, timesteps_to_save,
+    def extract_latents(self, cond_image_path, num_steps, data_path, save_path, timesteps_to_save,
                         inversion_prompt='', extract_reverse=False):
         self.scheduler.set_timesteps(num_steps)
 
-        cond = self.get_text_embeds(inversion_prompt, "")[1].unsqueeze(0)
+        # cond_embeds = self.get_text_embeds(inversion_prompt, "")[1].unsqueeze(0) # GOTCHA
+        cond_embeds = self.get_text_embeds(inversion_prompt, "")
+        
         image = self.load_img(data_path)
 
         
         latent = self.encode_imgs(image)
 
-        inverted_x = self.inversion_func(cond, latent, save_path, save_latents=not extract_reverse,
+        cond_image = Image.open(cond_image_path)
+        inverted_x = self.inversion_func(cond_image, cond_embeds, latent, save_path, save_latents=not extract_reverse,
                                          timesteps_to_save=timesteps_to_save)
-        latent_reconstruction = self.ddim_sample(inverted_x, cond, save_path, save_latents=extract_reverse,
+        latent_reconstruction = self.ddim_sample(inverted_x, cond_image, cond_embeds, save_path, save_latents=extract_reverse,
                                                  timesteps_to_save=timesteps_to_save)
         rgb_reconstruction = self.decode_latents(latent_reconstruction)
 
@@ -263,7 +300,8 @@ def run(opt):
         #                                                        strength=1.0,
         #                                                        device=device)
 
-    recon_image = model.extract_latents(data_path=opt.data_path,
+    recon_image = model.extract_latents(cond_image_path=opt.cond_image_path,
+                                        data_path=opt.data_path,
                                         num_steps=opt.steps,
                                         save_path=save_path,
                                         timesteps_to_save=None,
@@ -302,6 +340,7 @@ class LatentExtractor:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument('--cond_image_path', type=str)
     parser.add_argument('--data_path', type=str,
                         default='style_images/clouds.jpg')
     parser.add_argument('--save_dir', type=str, default='latents')
