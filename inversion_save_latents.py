@@ -15,7 +15,7 @@ from pathlib import Path
 import torchvision.transforms as T
 import random
 import numpy as np
-
+from src.cit_utils import show_latents
 
 def seed_everything(seed):
     random.seed(seed)
@@ -147,7 +147,7 @@ class Preprocess(nn.Module):
         
 
     @torch.no_grad()
-    def step_with_cn(self, cond_image, cond_batch, latent, t):
+    def step_with_cn(self, cond_image, cond_batch, latent, t, guidance_scale=7.5):
         # CIT - we now use the controlnet to generate the residuals                
         latent_model_input = torch.cat([latent] * 2)
         control_model_input = latent_model_input
@@ -175,7 +175,7 @@ class Preprocess(nn.Module):
         
         # CIT - passing the cn residuals to the unet
         #TODO bug: unet is called several times (wtf) latent_model_input.shape[0] is changed from 2 to 4 somehow, and the bug is that eps results in a tensor with shape[0] = 4 which is incompatible with the rest of the module.
-        eps = self.unet(
+        noise_pred = self.unet(
             latent_model_input,
             t,
             encoder_hidden_states=cond_batch,
@@ -185,17 +185,23 @@ class Preprocess(nn.Module):
             return_dict=False,
         )[0]
         
+        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+        eps = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+        
         return eps
 
 
     @torch.no_grad()
-    def cn_ddim_inversion(self, cond_image, cond_embeds, latent, save_path, save_latents=True,
+    def cn_ddim_inversion(self, cond_image, cond_embeds, latent, save_path, guidance_scale, save_latents=True,
                                 timesteps_to_save=None):
         """
         cond_image: image to condition on. should be PIL image
         cond_embeds: text embeddings that result from self.get_text_embeds
         latent: encoded latents of the image to invert
         """
+        # DBG
+        mid = []
+        
         timesteps = reversed(self.scheduler.timesteps)
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
@@ -212,44 +218,61 @@ class Preprocess(nn.Module):
                 sigma = (1 - alpha_prod_t) ** 0.5
                 sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
                 
-                eps = self.step_with_cn(cond_image, cond_batch, latent, t)                    
+                eps = self.step_with_cn(cond_image, cond_batch, latent, t, guidance_scale)                    
                     
                 pred_x0 = (latent - sigma_prev * eps) / mu_prev
                 latent = mu * pred_x0 + sigma * eps
                 if save_latents:
                     torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+                    
+                # DBG
+                mid.append(latent)
+        mid = torch.cat(mid, dim=0)
+        show_latents(mid)
+        
         torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
         return latent
 
     @torch.no_grad()
-    def ddim_sample(self, x, cond_image, cond_embeds, save_path, save_latents=False, timesteps_to_save=None):
+    def ddim_sample(self, x, cond_image, cond_embeds, save_path, guidance_scale, save_latents=False, timesteps_to_save=None):
+        # DBG
+        mid = []
+
         timesteps = self.scheduler.timesteps
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
-                    cond_batch = cond_embeds.repeat(x.shape[0], 1, 1)
-                    alpha_prod_t = self.scheduler.alphas_cumprod[t]
-                    alpha_prod_t_prev = (
-                        self.scheduler.alphas_cumprod[timesteps[i + 1]]
-                        if i < len(timesteps) - 1
-                        else self.scheduler.final_alpha_cumprod
-                    )
-                    mu = alpha_prod_t ** 0.5
-                    sigma = (1 - alpha_prod_t) ** 0.5
-                    mu_prev = alpha_prod_t_prev ** 0.5
-                    sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
+                cond_batch = cond_embeds.repeat(x.shape[0], 1, 1)
+                alpha_prod_t = self.scheduler.alphas_cumprod[t]
+                alpha_prod_t_prev = (
+                    self.scheduler.alphas_cumprod[timesteps[i + 1]]
+                    if i < len(timesteps) - 1
+                    else self.scheduler.final_alpha_cumprod
+                )
+                mu = alpha_prod_t ** 0.5
+                sigma = (1 - alpha_prod_t) ** 0.5
+                mu_prev = alpha_prod_t_prev ** 0.5
+                sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
 
-                    # eps = self.unet(x, t, encoder_hidden_states=cond_batch).sample
-                    eps = self.step_with_cn(cond_image, cond_batch, x, t)                    
+                # eps = self.unet(x, t, encoder_hidden_states=cond_batch).sample
+                eps = self.step_with_cn(cond_image, cond_batch, x, t, guidance_scale)                    
 
-                    pred_x0 = (x - sigma * eps) / mu
-                    x = mu_prev * pred_x0 + sigma_prev * eps
+                pred_x0 = (x - sigma * eps) / mu
+                x = mu_prev * pred_x0 + sigma_prev * eps
+                
+                # DBG
+                mid.append(x)
 
+            
             if save_latents:
                 torch.save(x, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+                
+        # DBG
+        mid = torch.cat(mid, dim=0)
+        show_latents(mid)
         return x
 
     @torch.no_grad()
-    def extract_latents(self, cond_image_path, num_steps, data_path, save_path, timesteps_to_save,
+    def extract_latents(self, cond_image_path, num_steps, data_path, save_path, timesteps_to_save, guidance_scale=7.5,
                         inversion_prompt='', extract_reverse=False):
         self.scheduler.set_timesteps(num_steps)
 
@@ -262,9 +285,9 @@ class Preprocess(nn.Module):
         latent = self.encode_imgs(image)
 
         cond_image = Image.open(cond_image_path)
-        inverted_x = self.inversion_func(cond_image, cond_embeds, latent, save_path, save_latents=not extract_reverse,
+        inverted_x = self.inversion_func(cond_image, cond_embeds, latent, save_path, guidance_scale, save_latents=not extract_reverse,
                                          timesteps_to_save=timesteps_to_save)
-        latent_reconstruction = self.ddim_sample(inverted_x, cond_image, cond_embeds, save_path, save_latents=extract_reverse,
+        latent_reconstruction = self.ddim_sample(inverted_x, cond_image, cond_embeds, save_path, guidance_scale, save_latents=extract_reverse,
                                                  timesteps_to_save=timesteps_to_save)
         rgb_reconstruction = self.decode_latents(latent_reconstruction)
 
@@ -305,6 +328,7 @@ def run(opt):
                                         num_steps=opt.steps,
                                         save_path=save_path,
                                         timesteps_to_save=None,
+                                        guidance_scale=opt.guidance_scale,
                                         inversion_prompt=opt.inversion_prompt,
                                         extract_reverse=opt.extract_reverse)
 
@@ -329,6 +353,7 @@ class LatentExtractor:
             data_path=opt.data_path,
             num_steps=opt.steps,
             save_path=save_path,
+            guidance_scale=opt.guidance_scale,
             timesteps_to_save=None,
             inversion_prompt=opt.inversion_prompt,
             extract_reverse=opt.extract_reverse
@@ -350,6 +375,7 @@ if __name__ == "__main__":
     parser.add_argument('--steps', type=int, default=30)
     # parser.add_argument('--save-steps', type=int, default=1000)
     parser.add_argument('--inversion_prompt', type=str, default='a photo of a')
+    parser.add_argument('--guidance_scale', type=float, default=7.5)
     parser.add_argument('--extract-reverse', default=False, action='store_true', help="extract features during the denoising process")
     opt = parser.parse_args()
     run(opt)
