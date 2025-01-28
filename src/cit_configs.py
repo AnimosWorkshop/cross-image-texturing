@@ -21,6 +21,8 @@ def parse_config():
     parser.add_argument('--prefix', type=str, default='MVD')
     parser.add_argument('--use_mesh_name', action='store_true')
     parser.add_argument('--timeformat', type=str, default='%d%b%Y-%H%M%S', help='Setting to None will not use time string in output directory')
+    parser.add_argument('--latents_save_path', type=str, default="./data/latents_app.pt", help='The path from which the saved latents will be loaded')
+    parser.add_argument('--cond_app_path', type=str, default="./data/cond_app.pt", help='The path from which the saved condition images will be loaded')
     # Diffusion Config
     parser.add_argument('--prompt', type=str, required=True)
     parser.add_argument('--negative_prompt', type=str, default='oversmoothed, blurry, depth of field, out of focus, low quality, bloom, glowing effect.')
