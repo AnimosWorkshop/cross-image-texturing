@@ -178,7 +178,7 @@ class Preprocess(nn.Module):
         noise_pred = self.unet(
             latent_model_input,
             t,
-            encoder_hidden_states=cond_batch,
+            encoder_hidden_states=cond_batch.clone(), # TODO try and see if the clone makes any change. this is a difference between my code and dana's.
             # cross_attention_kwargs=cross_attention_kwargs, #TODO might just be None
             down_block_additional_residuals=down_block_res_samples,
             mid_block_additional_residual=mid_block_res_sample,

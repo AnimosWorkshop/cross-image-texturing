@@ -1,5 +1,6 @@
 import glob
 
+import psutil
 from transformers import CLIPTextModel, CLIPTokenizer, logging
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, ControlNetModel
 
@@ -229,6 +230,12 @@ def run():
     control_images_path = sorted(glob.glob(os.path.join(opt.control_image_path, '*')))
 
     os.makedirs(opt.save_dir, exist_ok=True)
+    print(opt.data_path)
+    print(opt.control_image_path)
+    print("HI")
+    print(zip(images_path, control_images_path))
+    print(images_path)
+    print(control_images_path)
     for image_path, control_path in tqdm(zip(images_path, control_images_path)):
         image_name = os.path.basename(image_path)
         save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
@@ -245,7 +252,9 @@ def run():
         del model
         torch.cuda.empty_cache()
 
-        T.ToPILImage()(recon_image[0]).save(os.path.join(save_path, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
+        print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
+
+        T.ToPILImage()(recon_image[0]).save(os.path.join(opt.save_dir, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
 
 def parse_args():
     device = 'cuda'
