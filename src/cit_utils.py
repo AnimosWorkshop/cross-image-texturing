@@ -251,9 +251,24 @@ def show_latents(latents, dest_dir=lidor_dir):
 		latents = torch.load(latents)
  
 	if (len(latents.shape) == 3):
+		latents = latents.unsqueeze(0).unsqueeze(0)
+	elif (len(latents.shape) == 4):
 		latents = latents.unsqueeze(0)
 
-	latents = latents.to(torch.float16).to("cuda:0")
-	decoded_latents = latent_preview(latents)
-	concatenated_image = np.concatenate(decoded_latents, axis=1)
+	# latents = latents.to(torch.float16).to("cuda:0")
+	# decoded_latents = latent_preview(latents)
+	# concatenated_image = np.concatenate(decoded_latents, axis=1)
+	# numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+ 
+	# if len(latents.shape) != 5:
+	# 	return
+	views = []
+	for view in latents:
+		view = view.to(torch.float16).to("cuda:0")
+		decoded_latents = latent_preview(view)
+		concatenated_image = np.concatenate(decoded_latents, axis=1)
+		views.append(concatenated_image)
+	concatenated_image = np.concatenate(views, axis=0)
 	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+ 
+		
