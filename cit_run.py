@@ -113,7 +113,7 @@ result_tex_rgb, textured_views, v = model.pipe(
 	
 	# latents_load=False, # TODO change to True
 	latents_load=True,
-	latents_save_path="./data/latents_app.pt",
+	latents_save_path="./data/latents_app.pt", # TODO provide the midproccesed latents
 	cond_app_path="./data/cond_app.pt",
 
 	camera_azims=opt.camera_azims,

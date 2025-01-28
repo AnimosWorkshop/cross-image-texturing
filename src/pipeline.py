@@ -576,11 +576,9 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		else:
 			latents_app = torch.load(latents_save_path)
    
-		########################################################################################
-		### Right now, latents_app is the noisiest latent: the shape is [10, 4, 64, 64] ########
-		### The following change is that latents_app is all the latents [10, 100, 4, 64, 64] ###
-		########################################################################################
-   
+		# CIT DBG - TODO remove this
+		show_latents(latents_app, self.vae, self.intermediate_dir)
+		# exit(0)
 		# 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
 		extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
@@ -615,7 +613,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 				# expand the latents if we are doing classifier free guidance
 				latent_model_input = self.scheduler.scale_model_input(latents, t).to(torch.float16)
-				latent_model_input_app = self.scheduler.scale_model_input(latents_app[i], t)
+				latent_model_input_app = self.scheduler.scale_model_input(latents_app, t)
 
 				'''
 					Use groups to manage prompt and results
@@ -627,7 +625,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				if do_classifier_free_guidance:
 					prompt_embeds_groups["negative"] = negative_prompt_embeds
 
-				for prompt_tag, prompt_embeds in prompt_embeds_groups.items(): # Lidor asks: how many times does this loop run?
+				for prompt_tag, prompt_embeds in prompt_embeds_groups.items():
 					if prompt_tag == "positive" or not guess_mode:
 						# controlnet(s) inference
 						control_model_input = latent_model_input
@@ -771,7 +769,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						model_output=noise_pred_app, 
 						timestep=t,
 						prev_t=prev_t,
-						sample=latents_app[i], 
+						sample=latents_app, 
 						texture=latent_tex,
 						return_dict=True, 
 						main_views=[], 
@@ -784,7 +782,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					latents = step_results["prev_sample"]
 					latent_tex = step_results["prev_tex"]
 					pred_original_sample_app = step_results_app["pred_original_sample"]
-					# latents_app = step_results_app["prev_sample"] # CIT - This is not used since the latents are supplied for all timesteps.
+					latents_app = step_results_app["prev_sample"]
 
 					# Composit latent foreground with random color background
 					background_latents = [self.color_latents[color] for color in background_colors]
@@ -792,19 +790,19 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					latents = composited_tensor.type(latents.dtype)
 
 					intermediate_results.append((latents.to("cpu"), pred_original_sample.to("cpu")))
-					intermediate_results_app.append((latents_app[i].to("cpu"), pred_original_sample_app.to("cpu")))
+					intermediate_results_app.append((latents_app.to("cpu"), pred_original_sample_app.to("cpu")))
 				else:
 					step_results = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=True)
-					step_results_app = self.scheduler.step(noise_pred_app, t, latents_app[i], **extra_step_kwargs, return_dict=True)
+					step_results_app = self.scheduler.step(noise_pred_app, t, latents_app, **extra_step_kwargs, return_dict=True)
 
 					pred_original_sample = step_results["pred_original_sample"]
 					latents = step_results["prev_sample"]
 					latent_tex = None
 					pred_original_sample_app = step_results_app["pred_original_sample"]
-					# latents_app = step_results_app["prev_sample"] # CIT - This is not used since the latents are supplied for all timesteps.
+					latents_app = step_results_app["prev_sample"]
 
 					intermediate_results.append((latents.to("cpu"), pred_original_sample.to("cpu")))
-					intermediate_results_app.append((latents_app[i].to("cpu"), pred_original_sample_app.to("cpu")))
+					intermediate_results_app.append((latents_app.to("cpu"), pred_original_sample_app.to("cpu")))
 
 				del noise_pred, noise_pred_app, result_groups, result_groups_app
 					
@@ -835,7 +833,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				if i % log_interval == log_interval-1 or t == 1:
 					if view_fast_preview:
 						decoded_results = []
-						for latent_images in intermediate_results[-1]: # TODO why does it runs twice? tell lidor, he is curious
+						for latent_images in intermediate_results[-1]:
 							images = latent_preview(latent_images.to(self._execution_device))
 							images = np.concatenate([img for img in images], axis=1)
 							decoded_results.append(images)
