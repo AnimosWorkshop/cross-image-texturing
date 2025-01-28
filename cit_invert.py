@@ -66,7 +66,7 @@ def reshape_latents(latents):
 	I want the order to be reversed: noise is at index 0 and clear is at 99
 	I want to access the latents by [timestep, batch, channel, x, y]
     """
-    return latents.permute(1, 0, 2, 3, 4)[1:].flip(dims=[-1])
+    return latents.permute(1, 0, 2, 3, 4)[:-1]#.flip(dims=[-1])
  
 def get_inverted_views(tex_app_path, mesh_path_app, num_steps, prompt_for_inversion, save_path, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], camera_centers=None) -> list:
 	uvp_app = prepare_uvp(tex_app_path, mesh_path_app)
