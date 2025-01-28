@@ -1,0 +1,184 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "testing for dbg",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "python": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin/python",
+        }
+    ]
+}
+
+
+
+
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "testing for dbg",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${file}",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "python": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin/python",
+//             "env": {
+//                 "PYTHONPATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/lib/python3.x/site-packages"
+//             }
+//         },
+//         {
+//             "name": "Python: Current File",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${file}",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "python": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin/python",
+//             "env": {
+//                 "CONDA_SHLVL": "1",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "inversion_with_controlnet.py",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/inversion_with_controlnet.py",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "args": [
+//                 "--data_path",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg",
+//                 "--control_image_path",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg",
+//                 "--save_dir",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/dana/1111",
+//                 "--sd_version",
+//                 "1.5",
+//                 "--seed",
+//                 "42",
+//                 "--steps",
+//                 "100",
+//                 "--inversion_prompt",
+//                 "Portrait photo of Kratos, god of war."
+//             ],
+//             "env": {
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "inversion_save_latents.py",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/inversion_save_latents.py",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "args": [
+//                 "--cond_image_path",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_cond_4.jpg",
+//                 "--data_path",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/face_view_4.jpg",
+//                 "--save_dir",
+//                 "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/dana/1111",
+//                 "--sd_version",
+//                 "1.5",
+//                 "--seed",
+//                 "42",
+//                 "--steps",
+//                 "100",
+//                 "--inversion_prompt",
+//                 "Portrait photo of Kratos, god of war.",
+//                 "--extract-reverse"
+//             ],
+//             "env": {
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "Python Debugger: cit_run.py with Config",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/cit_run.py",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "args": [
+//                 "--config",
+//                 "${workspaceFolder}/data/config.yaml"
+//             ],
+//             "env": {
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "Invertion for Dana",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/invertion_for_dana.py",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "args": [],
+//             "env": {
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "invert_all.py",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${workspaceFolder}/invert_all.py",
+//             "console": "integratedTerminal",
+//             "justMyCode": false,
+//             "args": [],
+//             "env": {
+//                 "CONDA_PREFIX": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys",
+//                 "CONDA_DEFAULT_ENV": "lys",
+//                 "PATH": "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys/bin:${env:PATH}",
+//                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "6000",
+//                 "NLTK_DATA": "/home/ML_courses/03683533_2024/lidor_yael_snir/nltk_data",
+//                 "TRANSFORMERS_CACHE": "/home/ML_courses/03683533_2024/lidor_yael_snir/transformers_cache",
+//                 "HF_HOME": "/home/ML_courses/03683533_2024/lidor_yael_snir/hf_home"
+//             }
+//         },
+//         {
+//             "name": "Python Debugger: Python File",
+//             "type": "debugpy",
+//             "request": "launch",
+//             "program": "${file}"
+//         }
+//     ]
+// }
