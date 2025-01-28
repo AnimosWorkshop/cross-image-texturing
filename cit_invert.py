@@ -1,10 +1,10 @@
-from demo import demo
+# from demo import demo
 from src.cit_utils import image_to_tensor, tensor_to_image, show_views
 from src.project import UVProjection as UVP
-from src.pipeline import get_conditioning_images # TODO move the function to here.
-import torch 
+# from src.pipeline import get_conditioning_images # TODO move the function to here.
+# import torch 
 from PIL import Image
-from DANA_inversion_save_latents import Preprocess
+# from DANA_inversion_save_latents import Preprocess
 
 
 def set_cameras(uvp_app, camera_centers, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], top_cameras=True):
@@ -50,15 +50,15 @@ def prepare_uvp(tex_app_path, mesh_path_app, texture_rgb_size_app = 1024, device
  
 	return uvp_app
 	
-def invert_lidor(num_steps, image_tensor, prompt, device="cuda:0"):
-    """
-    @return: a 4D tensor of shape (num_steps,x,y,z), where the last index is the noise.
-    """
-    model = Preprocess(device=device, sd_version="1.5")
-    image_pil = tensor_to_image(image_tensor)
-    image = model.prepare_image(image_pil)
-    inverted_latents = model.invert_latents(num_steps=num_steps, image=image)
-    return inverted_latents
+# def invert_lidor(num_steps, image_tensor, prompt, device="cuda:0"):
+#     """
+#     @return: a 4D tensor of shape (num_steps,x,y,z), where the last index is the noise.
+#     """
+#     model = Preprocess(device=device, sd_version="1.5")
+#     image_pil = tensor_to_image(image_tensor)
+#     image = model.prepare_image(image_pil)
+#     inverted_latents = model.invert_latents(num_steps=num_steps, image=image)
+#     return inverted_latents
 
 def reshape_latents(latents):
     """
@@ -68,39 +68,39 @@ def reshape_latents(latents):
     """
     return latents.permute(1, 0, 2, 3, 4)[:-1]#.flip(dims=[-1])
  
-def get_inverted_views(tex_app_path, mesh_path_app, num_steps, prompt_for_inversion, save_path, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], camera_centers=None) -> list:
-	uvp_app = prepare_uvp(tex_app_path, mesh_path_app)
-	set_cameras(uvp_app, camera_centers, camera_azims=camera_azims)
+# def get_inverted_views(tex_app_path, mesh_path_app, num_steps, prompt_for_inversion, save_path, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], camera_centers=None) -> list:
+# 	uvp_app = prepare_uvp(tex_app_path, mesh_path_app)
+# 	set_cameras(uvp_app, camera_centers, camera_azims=camera_azims)
  
-	app_views = uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
-	app_views = [view[:-1] for view in app_views]
+# 	app_views = uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
+# 	app_views = [view[:-1] for view in app_views]
 
-	# show_views(app_views)
+# 	# show_views(app_views)
 
-	fully_inverted_latents = []
-	midproccesses = []
+# 	fully_inverted_latents = []
+# 	midproccesses = []
  
-	for i in range(len(uvp_app.cameras)):
-		image_tensor = app_views[i]
-		# First index here is to grab the correct variable, second is to get the first(?) timestep
-		inverted_x, mid = invert_lidor(num_steps=num_steps, image_tensor=image_tensor, prompt=prompt_for_inversion)
-		# demo(prompt=prompt_for_inversion, latent=inverted_x) # TODO remove this line
-		fully_inverted_latents.append(inverted_x)
-		midproccesses.append(mid)
-	fully_inverted_latents = torch.stack(fully_inverted_latents)
-	midproccesses = torch.stack(midproccesses)
-	midproccesses = reshape_latents(midproccesses)
-	torch.save(fully_inverted_latents, save_path)
-	torch.save(midproccesses, save_path.replace(".pt", "_midproccess.pt"))
+# 	for i in range(len(uvp_app.cameras)):
+# 		image_tensor = app_views[i]
+# 		# First index here is to grab the correct variable, second is to get the first(?) timestep
+# 		inverted_x, mid = invert_lidor(num_steps=num_steps, image_tensor=image_tensor, prompt=prompt_for_inversion)
+# 		# demo(prompt=prompt_for_inversion, latent=inverted_x) # TODO remove this line
+# 		fully_inverted_latents.append(inverted_x)
+# 		midproccesses.append(mid)
+# 	fully_inverted_latents = torch.stack(fully_inverted_latents)
+# 	midproccesses = torch.stack(midproccesses)
+# 	midproccesses = reshape_latents(midproccesses)
+# 	torch.save(fully_inverted_latents, save_path)
+# 	torch.save(midproccesses, save_path.replace(".pt", "_midproccess.pt"))
 	
 # def get_cond(uvp_app):
 #     conditioning_images_app, masks_app = get_conditioning_images(uvp_app, height, cond_type=)
 
-if __name__ == "__main__":
-	get_inverted_views(
-		tex_app_path="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/data/textured.png",
-		mesh_path_app="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/data/textured.obj",
-		num_steps=100,
-		prompt_for_inversion="Portrait photo of Kratos, god of war.",
-		save_path="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/cit_inveeeert.pt",
-	)
+# if __name__ == "__main__":
+# 	get_inverted_views(
+# 		tex_app_path="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/data/textured.png",
+# 		mesh_path_app="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/data/textured.obj",
+# 		num_steps=100,
+# 		prompt_for_inversion="Portrait photo of Kratos, god of war.",
+# 		save_path="/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/cit_inveeeert.pt",
+# 	)

@@ -4,6 +4,8 @@ from transformers import CLIPTextModel, CLIPTokenizer, logging
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, StableDiffusionXLPipeline
 from diffusers.utils import load_image
 
+from cit_invert import reshape_latents
+
 # suppress partial model loading warning
 logging.set_verbosity_error()
 
@@ -245,10 +247,12 @@ def run(opt):
 
     os.makedirs(save_path, exist_ok=True)
 
-    images_path = sorted(glob.glob(os.path.join(opt.data_path, '*'))) # Getting all the files in the directory specified in data_path
+    image_paths = sorted(glob.glob(os.path.join(opt.data_path, '*'))) # Getting all the files in the directory specified in data_path
+    print(image_paths)
+    
     recons = []
     # for image_path, control_path in tqdm(zip(images_path, control_images_path)):
-    for image_path in tqdm(images_path): # TODO: remove. this is for testing to run faster
+    for image_path in tqdm(image_paths): # TODO: remove. this is for testing to run faster
         image_name = os.path.basename(image_path)
         # save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
@@ -268,6 +272,7 @@ def run(opt):
         print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
         
     recons = torch.stack(recons)
+    recons = reshape_latents(recons)
     torch.save(recons, os.path.join(opt.save_dir, 'recons.pt'))
 
 
