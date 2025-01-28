@@ -1,3 +1,5 @@
+import glob
+import psutil
 from transformers import CLIPTextModel, CLIPTokenizer, logging
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, StableDiffusionXLPipeline
 from diffusers.utils import load_image
@@ -200,7 +202,7 @@ class Preprocess(nn.Module):
                 
         mid = torch.cat(mid, dim=0)
         torch.save(mid, os.path.join(save_path, f'recon_proccess.pt'))
-        return x
+        return x, mid
 
     @torch.no_grad()
     def extract_latents(self, num_steps, data_path, save_path, timesteps_to_save,
@@ -215,11 +217,11 @@ class Preprocess(nn.Module):
 
         inverted_x = self.inversion_func(cond, latent, save_path, save_latents=not extract_reverse,
                                          timesteps_to_save=timesteps_to_save)
-        latent_reconstruction = self.ddim_sample(inverted_x, cond, save_path, save_latents=extract_reverse,
+        latent_reconstruction, recon_proccess = self.ddim_sample(inverted_x, cond, save_path, save_latents=extract_reverse,
                                                  timesteps_to_save=timesteps_to_save)
         rgb_reconstruction = self.decode_latents(latent_reconstruction)
 
-        return rgb_reconstruction  # , latent_reconstruction
+        return rgb_reconstruction, recon_proccess  # , latent_reconstruction
 
 def run(opt):
     # timesteps to save
@@ -238,27 +240,55 @@ def run(opt):
     seed_everything(opt.seed)
 
     extraction_path_prefix = "_reverse" if opt.extract_reverse else "_forward"
-    save_path = os.path.join(opt.save_dir + extraction_path_prefix, os.path.splitext(os.path.basename(opt.data_path))[0])
+    # save_path = os.path.join(opt.save_dir + extraction_path_prefix, os.path.splitext(os.path.basename(opt.data_path))[0])
+    save_path = opt.save_dir
 
     os.makedirs(save_path, exist_ok=True)
 
-    model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
+    images_path = sorted(glob.glob(os.path.join(opt.data_path, '*'))) # Getting all the files in the directory specified in data_path
+    recons = []
+    # for image_path, control_path in tqdm(zip(images_path, control_images_path)):
+    for image_path in tqdm(images_path): # TODO: remove. this is for testing to run faster
+        image_name = os.path.basename(image_path)
+        # save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
-
-        # toy_scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
-        # toy_scheduler.set_timesteps(opt.save_steps)
-        # timesteps_to_save, num_inference_steps = get_timesteps(toy_scheduler, num_inference_steps=opt.save_steps,
-        #                                                        strength=1.0,
-        #                                                        device=device)
-
-    recon_image = model.extract_latents(data_path=opt.data_path,
+        model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
+        
+        recon_image, recon_proccess = model.extract_latents(data_path=image_path,
                                         num_steps=opt.steps,
                                         save_path=save_path,
                                         timesteps_to_save=None,
                                         inversion_prompt=opt.inversion_prompt,
                                         extract_reverse=opt.extract_reverse)
+        recons.append(recon_proccess)
+        
+        del model
+        torch.cuda.empty_cache()
+        
+        print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
+        
+    recons = torch.stack(recons)
+    torch.save(recons, os.path.join(opt.save_dir, 'recons.pt'))
 
-    T.ToPILImage()(recon_image[0]).save(os.path.join(save_path, f'recon.jpg'))
+
+    # model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
+
+
+    #     # toy_scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
+    #     # toy_scheduler.set_timesteps(opt.save_steps)
+    #     # timesteps_to_save, num_inference_steps = get_timesteps(toy_scheduler, num_inference_steps=opt.save_steps,
+    #     #                                                        strength=1.0,
+    #     #                                                        device=device)
+
+    # recon_image = model.extract_latents(data_path=opt.data_path,
+    #                                     num_steps=opt.steps,
+    #                                     save_path=save_path,
+    #                                     timesteps_to_save=None,
+    #                                     inversion_prompt=opt.inversion_prompt,
+    #                                     extract_reverse=opt.extract_reverse)
+
+    # T.ToPILImage()(recon_image[0]).save(os.path.join(save_path, f'recon.jpg'))
+    
 
 class LatentExtractor:
     def __init__(self, device='cuda', sd_version='2.1'):
@@ -301,5 +331,4 @@ if __name__ == "__main__":
     parser.add_argument('--inversion_prompt', type=str, default='a photo of a')
     parser.add_argument('--extract-reverse', default=False, action='store_true', help="extract features during the denoising process")
     opt = parser.parse_args()
-    print(opt.__dict__)
     run(opt)
