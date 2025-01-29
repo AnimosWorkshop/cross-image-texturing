@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import argparse
 from pathlib import Path
+import gc
 import torchvision.transforms as T
 
 device = 'cuda'
@@ -118,6 +119,7 @@ class Preprocess(nn.Module):
     @torch.no_grad()
     def ddim_inversion(self, cond, latent, control_image, save_path):
         timesteps = reversed(self.scheduler.timesteps)
+        mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
                 cond_batch = cond.repeat(latent.shape[0], 1, 1)
@@ -150,11 +152,16 @@ class Preprocess(nn.Module):
 
                 pred_x0 = (latent - sigma_prev * eps) / mu_prev
                 latent = mu * pred_x0 + sigma * eps
-        return latent
+                mid.append(latent)
+                
+        mid = torch.cat(mid, dim=0)
+        # return latent, mid # CIT uncomment this line
+        return latent  # CIT comment this line
 
     @torch.no_grad()
     def ddim_sample(self, x, cond, control_image, save_path):
         timesteps = self.scheduler.timesteps
+        mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             for i, t in enumerate(tqdm(timesteps)):
                     cond_batch = cond.repeat(x.shape[0], 1, 1)
@@ -186,8 +193,12 @@ class Preprocess(nn.Module):
 
                     pred_x0 = (x - sigma * eps) / mu
                     x = mu_prev * pred_x0 + sigma_prev * eps
+                    
+                    mid.append(x)
 
-        return x
+        mid = torch.cat(mid, dim=0)
+        # return x, mid # CIT uncomment this line
+        return x # CIT comments this line
 
     @torch.no_grad()
     def extract_latents(self, num_steps, data_path, control_path, save_path, timesteps_to_save,
@@ -202,10 +213,13 @@ class Preprocess(nn.Module):
 
         inverted_x = self.inversion_func(cond, latent, control_image, save_path)
         torch.save(inverted_x, save_path)
-        latent_reconstruction = self.ddim_sample(inverted_x, cond, control_image, save_path)
+        # latent_reconstruction, recon_proccess= self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT uncomment this line
+        latent_reconstruction = self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT comments this line
+
         rgb_reconstruction = self.decode_latents(latent_reconstruction)
 
-        return rgb_reconstruction  # , latent_reconstruction
+        # return rgb_reconstruction, recon_proccess # CIT uncomment this line
+        return rgb_reconstruction # CIT comments this line
 
 
 def run():
@@ -241,7 +255,8 @@ def run():
         save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
         model = Preprocess(device, sd_version=opt.sd_version, hf_key=None, lora_weights_path=opt.lora_weights_path)
-        recon_image = model.extract_latents(data_path=image_path,
+        # recon_image, recon_proccess = model.extract_latents(data_path=image_path, # CIT uncomment this line
+        recon_image = model.extract_latents(data_path=image_path, # CIT comment this line
                                              control_path=control_path,
                                              num_steps=opt.steps,
                                              save_path=save_path,
@@ -249,12 +264,16 @@ def run():
                                              inversion_prompt=opt.inversion_prompt,
                                             square=opt.square_size,
                                             )
+        
+        T.ToPILImage()(recon_image[0]).save(os.path.join(opt.save_dir, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
+        del recon_image
         del model
+        gc.collect()
         torch.cuda.empty_cache()
 
         print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
 
-        T.ToPILImage()(recon_image[0]).save(os.path.join(opt.save_dir, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
+
 
 def parse_args():
     device = 'cuda'

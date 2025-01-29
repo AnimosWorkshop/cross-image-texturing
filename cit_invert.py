@@ -63,11 +63,18 @@ def prepare_uvp(tex_app_path, mesh_path_app, texture_rgb_size_app = 1024, device
 def reshape_latents(latents):
     """
     I want only the 100 noisy latents (all timesteps but 1)
-	I want the order to be reversed: noise is at index 0 and clear is at 99
+	I want the noise to be at index 0 and clear is at the last index
 	I want to access the latents by [timestep, batch, channel, x, y]
     """
     return latents.permute(1, 0, 2, 3, 4)[:-1]#.flip(dims=[-1])
  
+def reshape_inverted_latents(latents):
+	"""
+	I want only the 100 noisy latents (all timesteps but 1)
+	I want the noise to be at index 0 and clear is at the last index
+	I want to access the latents by [timestep, batch, channel, x, y]
+	"""
+	return latents.permute(1, 0, 2, 3, 4)[1:].flip(dims=[-1])
 # def get_inverted_views(tex_app_path, mesh_path_app, num_steps, prompt_for_inversion, save_path, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], camera_centers=None) -> list:
 # 	uvp_app = prepare_uvp(tex_app_path, mesh_path_app)
 # 	set_cameras(uvp_app, camera_centers, camera_azims=camera_azims)
