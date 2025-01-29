@@ -373,7 +373,7 @@ if __name__ == "__main__":
                         help="stable diffusion version")
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--steps', type=int, default=30)
-    # parser.add_argument('--save-steps', type=int, default=1000)
+    # parser.add_argument('--save_steps', type=int, default=1000)
     parser.add_argument('--inversion_prompt', type=str, default='a photo of a')
     parser.add_argument('--guidance_scale', type=float, default=7.5)
     parser.add_argument('--extract-reverse', default=False, action='store_true', help="extract features during the denoising process")

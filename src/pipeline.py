@@ -614,7 +614,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 
 				# expand the latents if we are doing classifier free guidance
-				show_latents(latents)
 				latent_model_input = self.scheduler.scale_model_input(latents, t).to(torch.float16)
 				latent_model_input_app = self.scheduler.scale_model_input(latents_app[i], t)
 

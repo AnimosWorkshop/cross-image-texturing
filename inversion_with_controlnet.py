@@ -4,6 +4,8 @@ import psutil
 from transformers import CLIPTextModel, CLIPTokenizer, logging
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, ControlNetModel
 
+from cit_invert import reshape_latents
+
 # suppress partial model loading warning
 logging.set_verbosity_error()
 
@@ -154,9 +156,8 @@ class Preprocess(nn.Module):
                 latent = mu * pred_x0 + sigma * eps
                 mid.append(latent)
                 
-        mid = torch.cat(mid, dim=0)
-        # return latent, mid # CIT uncomment this line
-        return latent  # CIT comment this line
+        mid = torch.cat(mid, dim=0).to("cpu") # CIT TODO we are not returning mid for now (we dont care about it)
+        return latent  # CIT 
 
     @torch.no_grad()
     def ddim_sample(self, x, cond, control_image, save_path):
@@ -196,9 +197,9 @@ class Preprocess(nn.Module):
                     
                     mid.append(x)
 
-        mid = torch.cat(mid, dim=0)
-        # return x, mid # CIT uncomment this line
-        return x # CIT comments this line
+        mid = torch.cat(mid, dim=0).to("cpu")
+        return x, mid # CIT uncomment this line
+        # return x # CIT comments this line
 
     @torch.no_grad()
     def extract_latents(self, num_steps, data_path, control_path, save_path, timesteps_to_save,
@@ -213,17 +214,33 @@ class Preprocess(nn.Module):
 
         inverted_x = self.inversion_func(cond, latent, control_image, save_path)
         torch.save(inverted_x, save_path)
-        # latent_reconstruction, recon_proccess= self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT uncomment this line
-        latent_reconstruction = self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT comments this line
+        latent_reconstruction, recon_proccess= self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT uncomment this line
+        # latent_reconstruction = self.ddim_sample(inverted_x, cond, control_image, save_path) # CIT comments this line
 
         rgb_reconstruction = self.decode_latents(latent_reconstruction)
 
-        # return rgb_reconstruction, recon_proccess # CIT uncomment this line
-        return rgb_reconstruction # CIT comments this line
+        return rgb_reconstruction, recon_proccess # CIT uncomment this line
+        # return rgb_reconstruction # CIT comments this line
 
 
-def run():
-    opt = parse_args()
+def run(opt : argparse.Namespace):
+    """
+    Run the cross-image texturing process with ControlNet.
+    Args:
+        opt (argparse.Namespace): The options for running the process. It should contain the following attributes:
+            - sd_version (str): The version of Stable Diffusion to use. Options are '2.1', '2.0', '1.5', or 'depth'.
+            - save_steps (int): The number of timesteps to save during the process.
+            - data_path (str): The path to the directory containing the input images.
+            - control_image_path (str): The path to the directory containing the control images.
+            - save_dir (str): The directory where the output files will be saved.
+            - lora_weights_path (str): The path to the LoRA weights file.
+            - steps (int): The number of steps for the extraction process.
+            - inversion_prompt (str): The prompt to use for inversion.
+            - square_size (int): The size of the square for processing.
+    Returns:
+        Saves the reconstructed images to the specified directory, and returns the path to the saved file.
+    """
+    
 
     # timesteps to save
     if opt.sd_version == '2.1':
@@ -244,19 +261,16 @@ def run():
     control_images_path = sorted(glob.glob(os.path.join(opt.control_image_path, '*')))
 
     os.makedirs(opt.save_dir, exist_ok=True)
-    print(opt.data_path)
-    print(opt.control_image_path)
-    print("HI")
-    print(zip(images_path, control_images_path))
     print(images_path)
-    print(control_images_path)
+
+    recons = []
     for image_path, control_path in tqdm(zip(images_path, control_images_path)):
         image_name = os.path.basename(image_path)
         save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
         model = Preprocess(device, sd_version=opt.sd_version, hf_key=None, lora_weights_path=opt.lora_weights_path)
-        # recon_image, recon_proccess = model.extract_latents(data_path=image_path, # CIT uncomment this line
-        recon_image = model.extract_latents(data_path=image_path, # CIT comment this line
+        recon_image, recon_proccess = model.extract_latents(data_path=image_path, # CIT uncomment this line
+        # recon_image = model.extract_latents(data_path=image_path, # CIT comment this line
                                              control_path=control_path,
                                              num_steps=opt.steps,
                                              save_path=save_path,
@@ -264,6 +278,8 @@ def run():
                                              inversion_prompt=opt.inversion_prompt,
                                             square=opt.square_size,
                                             )
+        recons.append(recon_proccess)
+        
         
         T.ToPILImage()(recon_image[0]).save(os.path.join(opt.save_dir, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
         del recon_image
@@ -273,7 +289,11 @@ def run():
 
         print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
 
-
+    recons = torch.stack(recons)
+    recons = reshape_latents(recons)
+    result_file_name = os.path.join(opt.save_dir, 'recons.pt')
+    torch.save(recons, result_file_name)
+    return result_file_name
 
 def parse_args():
     device = 'cuda'
@@ -288,7 +308,7 @@ def parse_args():
                         help="stable diffusion version")
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--steps', type=int, default=50)
-    parser.add_argument('--save-steps', type=int, default=1000)
+    parser.add_argument('--save_steps', type=int, default=1000)
     parser.add_argument('--inversion_prompt', type=str, default="a man in a blue shirt and khaki pants standing in front of a white wall")
     parser.add_argument('--square_size', type=bool, default=False)
     parser.add_argument('--lora_weights_path', type=str, default=None)
@@ -297,4 +317,5 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    run()
+    opt = parse_args()
+    run(opt)

@@ -1,5 +1,10 @@
+from src.cit_configs import *
+opt = parse_config()
+
+
 import os
 from os.path import join, isdir, abspath, dirname, basename, splitext
+from typing import List
 from IPython.display import display
 from datetime import datetime
 import torch
@@ -7,15 +12,70 @@ from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, UniPCMultistepScheduler
 from diffusers.training_utils import set_seed
 from src.pipeline import StableSyncMVDPipeline
-from src.cit_configs import *
 from shutil import copy
 from src.CIA.appearance_transfer_model import AppearanceTransferModel
-
+from PIL import Image
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
 
-opt = parse_config()
+
+def make_dirs_for_app_proccessing(output_dir):
+	inversion_dir = join(output_dir, "inversion")
+	cond_dir = join(output_dir, "cond")
+	data_dir = join(output_dir, "data") # 'data' is the terminology of invertsion_with_controlnet for the views.
+
+	if not isdir(inversion_dir):
+		os.mkdir(inversion_dir)
+	if not isdir(cond_dir):
+		os.mkdir(cond_dir)
+	if not isdir(data_dir):
+		os.mkdir(data_dir)
+  
+	return inversion_dir, cond_dir, data_dir
+
+def save_list_of_tensors(base_name:str, tensor_list:List[torch.Tensor], output_dir:str):
+	for i, tensor in enumerate(tensor_list):
+		torch.save(tensor, join(output_dir, f"{base_name}_{i}.pt"))
+
+def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:str):
+	for i, image in enumerate(image_list):
+		image.save(join(output_dir, f"{base_name}_{i}.png"))
+
+def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, cond_type, camera_azims=None):
+	from cit_invert import get_views_and_depth
+	from argparse import Namespace
+	from inversion_with_controlnet import run
+ 
+	inversion_dir, cond_dir, data_dir = make_dirs_for_app_proccessing(output_dir)
+ 
+	print(f"Saving appearance views to {data_dir}")
+	print(f"Saving appearance conditioning images to {cond_dir}")
+	print(f"Saving inverted appearance latents to {inversion_dir}")
+ 
+	app_views, app_cond_images = get_views_and_depth(tex_app_path=tex_app, mesh_path_app=mesh_app, camera_azims=camera_azims, cond_type=cond_type)
+	save_list_of_images("view", app_views, data_dir)
+	save_list_of_images("cond", app_cond_images, cond_dir)
+
+
+	# Create opt object directly
+	opt = Namespace(
+		data_path=data_dir,
+		control_image_path=cond_dir,
+		save_dir=inversion_dir,
+		sd_version='1.5',
+		seed=seed,
+		steps=steps,
+		save_steps=1000,  # or another value if needed
+		inversion_prompt=prompt,
+		lora_weights_path=None,
+		square_size=False,
+	)
+	recon_latents_path = run(opt)
+ 
+	return recon_latents_path, cond_dir
+
+
 
 if opt.mesh_config_relative:
 	mesh_path = join(dirname(opt.config), opt.mesh)
@@ -82,6 +142,14 @@ model_cfg = RunConfig(opt.prompt)
 set_seed(model_cfg.seed)
 model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
+
+
+if opt.latents_load:
+	latents_save_path = opt.latents_save_path
+	cond_app_path = opt.cond_app_path
+else:
+	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, opt.cond_type, opt.camera_azims)
+
 # Run the SyncMVD pipeline
 
 result_tex_rgb, textured_views, v = model.pipe(
@@ -111,12 +179,9 @@ result_tex_rgb, textured_views, v = model.pipe(
 	mesh_transform_app={"scale":opt.mesh_scale},
 	mesh_autouv_app=not opt.keep_mesh_uv,
 	
-	# latents_load=False, # TODO change to True
 	latents_load=True,
-	# latents_save_path="./data/latents_app.pt", # TODO provide the midproccesed latents
-	latents_save_path=opt.latents_save_path,
-	# cond_app_path="./data/cond_app.pt",
-	cond_app_path=opt.cond_app_path,
+	latents_save_path=latents_save_path,
+	cond_app_path=cond_app_path,
 
 
 	camera_azims=opt.camera_azims,

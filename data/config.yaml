@@ -13,4 +13,5 @@ log_interval: 1
 tex_fast_preview: True
 view_fast_preview: True
 latents_save_path: "./data/latents_app_10_steps.pt"
+latents_load: False
 # cond_app_path: "./data/cond_app.pt"

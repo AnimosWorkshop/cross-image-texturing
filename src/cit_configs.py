@@ -23,6 +23,7 @@ def parse_config():
     parser.add_argument('--timeformat', type=str, default='%d%b%Y-%H%M%S', help='Setting to None will not use time string in output directory')
     parser.add_argument('--latents_save_path', type=str, default="./data/latents_app.pt", help='The path from which the saved latents will be loaded')
     parser.add_argument('--cond_app_path', type=str, default="./data/cond_app.pt", help='The path from which the saved condition images will be loaded')
+    parser.add_argument('--latents_load',action='store_true', help='Whether to load the reconstruction latents and condition images from the latents_save_path and cond_app_path. If False, or one of the paths is not found, the latents and condition images will be generated from scratch')
     # Diffusion Config
     parser.add_argument('--prompt', type=str, required=True)
     parser.add_argument('--negative_prompt', type=str, default='oversmoothed, blurry, depth of field, out of focus, low quality, bloom, glowing effect.')
