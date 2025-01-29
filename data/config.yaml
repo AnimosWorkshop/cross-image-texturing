@@ -1,16 +1,16 @@
-mesh: "./head.obj"
+mesh: "./face.obj"
 mesh_app: "./textured.obj"
 tex_app: "./textured.png"
 mtl_app: "./textured.mtl"
 mesh_config_relative: True    # mesh is placed relative to the config file
 use_mesh_name: False
 prompt: "Portrait photo of Kratos, god of war."
-steps: 50
+steps: 10
 cond_type: "depth"
 seed: 1
 mesh_scale: 1
 log_interval: 1
 tex_fast_preview: True
 view_fast_preview: True
-latents_save_path: "./data/latents_app2.pt"
-cond_app_path: "./data/cond_app.pt"
+latents_save_path: "./data/latents_app_10_steps.pt"
+# cond_app_path: "./data/cond_app.pt"
