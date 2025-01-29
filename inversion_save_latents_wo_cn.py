@@ -144,9 +144,13 @@ class Preprocess(nn.Module):
     def ddim_inversion(self, cond, latent, save_path, save_latents=True,
                                 timesteps_to_save=None):
         timesteps = reversed(self.scheduler.timesteps)
+        timesteps = torch.cat([timesteps[:-2], timesteps[-1:]]) # There is a bug that causes the panultimate timestep to be duplicated. so we discard it here. idk why it happens.
+
+        # print(f"timesteps: {timesteps}")
         mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
-            for i, t in enumerate(tqdm(timesteps)):
+            # for i, t in enumerate(tqdm(timesteps)):
+            for i, t in enumerate(timesteps):
                 cond_batch = cond.repeat(latent.shape[0], 1, 1)
 
                 alpha_prod_t = self.scheduler.alphas_cumprod[t]
@@ -165,6 +169,7 @@ class Preprocess(nn.Module):
                 pred_x0 = (latent - sigma_prev * eps) / mu_prev
                 latent = mu * pred_x0 + sigma * eps
                 
+                # print(f"${t} {i}")
                 mid.append(latent)
                 
                 if save_latents:
@@ -175,12 +180,51 @@ class Preprocess(nn.Module):
         torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
         return latent
 
-    @torch.no_grad()
+
+    # @torch.no_grad()
+    # def ddim_inversion(self, cond, latent, save_path, save_latents=True, timesteps_to_save=None):
+    #     timesteps = list(reversed(self.scheduler.timesteps))
+    #     mid = []
+    #     with torch.autocast(device_type='cuda', dtype=torch.float32):
+    #         for i, t in enumerate(timesteps[:-1]):  # Exclude last timestep from main loop
+    #             cond_batch = cond.repeat(latent.shape[0], 1, 1)
+
+    #             alpha_prod_t = self.scheduler.alphas_cumprod[t]
+    #             alpha_prod_t_prev = self.scheduler.alphas_cumprod[timesteps[i + 1]]
+
+    #             mu = alpha_prod_t ** 0.5
+    #             mu_prev = alpha_prod_t_prev ** 0.5
+    #             sigma = (1 - alpha_prod_t) ** 0.5
+    #             sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
+                
+    #             eps = self.unet(latent, t, encoder_hidden_states=cond_batch).sample
+                    
+    #             pred_x0 = (latent - sigma_prev * eps) / mu_prev
+    #             latent = mu * pred_x0 + sigma * eps
+                
+    #             print(f"${t} {i}")
+    #             mid.append(latent)
+                
+    #             if save_latents:
+    #                 torch.save(latent, os.path.join(save_path, f'noisy_latents_{t}.pt'))
+
+    #         # Handle final timestep if needed
+    #         if save_latents:
+    #             torch.save(latent, os.path.join(save_path, f'noisy_latents_{timesteps[-1]}.pt'))
+                
+    #     mid = torch.cat(mid, dim=0)
+    #     torch.save(mid, os.path.join(save_path, f'invertion_proccess.pt'))
+        
+    #     return latent
+
+    # @torch.no_grad()
     def ddim_sample(self, x, cond, save_path, save_latents=False, timesteps_to_save=None):
         timesteps = self.scheduler.timesteps
+        timesteps = torch.cat([timesteps[:1], timesteps[2:]]) # There is a bug that causes the panultimate timestep to be duplicated. so we discard it here. idk why it happens.
         mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
-            for i, t in enumerate(tqdm(timesteps)):
+            # for i, t in enumerate(tqdm(timesteps)):
+            for i, t in enumerate(timesteps):
                     cond_batch = cond.repeat(x.shape[0], 1, 1)
                     alpha_prod_t = self.scheduler.alphas_cumprod[t]
                     alpha_prod_t_prev = (
@@ -197,6 +241,8 @@ class Preprocess(nn.Module):
 
                     pred_x0 = (x - sigma * eps) / mu
                     x = mu_prev * pred_x0 + sigma_prev * eps
+                    
+                    # print(f"${t} {i}")
                     mid.append(x)
 
             if save_latents:
@@ -205,6 +251,35 @@ class Preprocess(nn.Module):
         mid = torch.cat(mid, dim=0)
         torch.save(mid, os.path.join(save_path, f'recon_proccess.pt'))
         return x, mid
+   
+    
+    # @torch.no_grad()
+    # def ddim_sample(self, x, cond, save_path, save_latents=False, timesteps_to_save=None):
+    #     timesteps = self.scheduler.timesteps
+    #     mid = []
+    #     with torch.autocast(device_type='cuda', dtype=torch.float32):
+    #         for i, t in enumerate(timesteps[:-1]): # Changed this line to exclude last timestep
+    #             cond_batch = cond.repeat(x.shape[0], 1, 1)
+    #             alpha_prod_t = self.scheduler.alphas_cumprod[t]
+    #             alpha_prod_t_prev = self.scheduler.alphas_cumprod[timesteps[i + 1]]
+    #             mu = alpha_prod_t ** 0.5
+    #             sigma = (1 - alpha_prod_t) ** 0.5
+    #             mu_prev = alpha_prod_t_prev ** 0.5
+    #             sigma_prev = (1 - alpha_prod_t_prev) ** 0.5
+
+    #             eps = self.unet(x, t, encoder_hidden_states=cond_batch).sample
+
+    #             pred_x0 = (x - sigma * eps) / mu
+    #             x = mu_prev * pred_x0 + sigma_prev * eps
+    #             mid.append(x)
+
+    #         # Handle the last timestep separately if needed
+    #         if save_latents:
+    #             torch.save(x, os.path.join(save_path, f'noisy_latents_{timesteps[-1]}.pt'))
+                
+    #     mid = torch.cat(mid, dim=0)
+    #     torch.save(mid, os.path.join(save_path, f'recon_proccess.pt'))
+    #     return x, mid
 
     @torch.no_grad()
     def extract_latents(self, num_steps, data_path, save_path, timesteps_to_save,
@@ -251,12 +326,12 @@ def run(opt):
     print(image_paths)
     
     recons = []
+    model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
     # for image_path, control_path in tqdm(zip(images_path, control_images_path)):
     for image_path in tqdm(image_paths): # TODO: remove. this is for testing to run faster
         image_name = os.path.basename(image_path)
         # save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
-        model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
         
         recon_image, recon_proccess = model.extract_latents(data_path=image_path,
                                         num_steps=opt.steps,
@@ -266,62 +341,18 @@ def run(opt):
                                         extract_reverse=opt.extract_reverse)
         recons.append(recon_proccess)
         
-        del model
+        # del model
         torch.cuda.empty_cache()
         
         print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
         
     recons = torch.stack(recons)
     recons = reshape_latents(recons)
-    torch.save(recons, os.path.join(opt.save_dir, 'recons.pt'))
+    result_file_name = os.path.join(opt.save_dir, 'recons.pt')
+    torch.save(recons, result_file_name)
+    return result_file_name
 
-
-    # model = Preprocess(device, sd_version=opt.sd_version, hf_key=None)
-
-
-    #     # toy_scheduler = DDIMScheduler.from_pretrained(model_key, subfolder="scheduler")
-    #     # toy_scheduler.set_timesteps(opt.save_steps)
-    #     # timesteps_to_save, num_inference_steps = get_timesteps(toy_scheduler, num_inference_steps=opt.save_steps,
-    #     #                                                        strength=1.0,
-    #     #                                                        device=device)
-
-    # recon_image = model.extract_latents(data_path=opt.data_path,
-    #                                     num_steps=opt.steps,
-    #                                     save_path=save_path,
-    #                                     timesteps_to_save=None,
-    #                                     inversion_prompt=opt.inversion_prompt,
-    #                                     extract_reverse=opt.extract_reverse)
-
-    # T.ToPILImage()(recon_image[0]).save(os.path.join(save_path, f'recon.jpg'))
     
-
-class LatentExtractor:
-    def __init__(self, device='cuda', sd_version='2.1'):
-        self.device = device
-        self.sd_version = sd_version
-
-        self.model = Preprocess(self.device, sd_version=self.sd_version, hf_key=None)
-
-    def run(self, opt):
-        seed_everything(opt.seed)
-
-        extraction_path_prefix = "_reverse" if opt.extract_reverse else "_forward"
-        save_path = os.path.join(opt.save_dir + extraction_path_prefix, os.path.splitext(os.path.basename(opt.data_path))[0])
-
-        os.makedirs(save_path, exist_ok=True)
-
-        recon_image = self.model.extract_latents(
-            data_path=opt.data_path,
-            num_steps=opt.steps,
-            save_path=save_path,
-            timesteps_to_save=None,
-            inversion_prompt=opt.inversion_prompt,
-            extract_reverse=opt.extract_reverse
-        )
-
-        T.ToPILImage()(recon_image[0]).save(os.path.join(save_path, f'recon.jpg'))
-
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

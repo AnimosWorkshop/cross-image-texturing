@@ -1,4 +1,4 @@
-from src.cit_utils import image_to_tensor, tensor_to_image, show_views
+from src.cit_utils import image_to_tensor, show_latents, tensor_to_image, show_views
 from src.project import UVProjection as UVP
 from PIL import Image
 from src.pipeline import get_conditioning_images
@@ -53,7 +53,8 @@ def reshape_latents(latents):
 	I want the noise to be at index 0 and clear is at the last index
 	I want to access the latents by [timestep, batch, channel, x, y]
     """
-    return latents.permute(1, 0, 2, 3, 4)[:-1]
+    # show_latents(latents.permute(1, 0, 2, 3, 4)[-1]) #This is the clear image
+    return latents.permute(1, 0, 2, 3, 4)#[:-1]
  
 def reshape_inverted_latents(latents):
 	"""
@@ -65,7 +66,7 @@ def reshape_inverted_latents(latents):
 
 def get_views_and_depth(tex_app_path, mesh_path_app, camera_azims=[-180, -135, -90, -45, 0, 45, 90, 135], camera_centers=None, height=512,cond_type="depth"):
 	"""
- 	Returns a list of PIL Images, each is a view of the mesh with the texture applied, and a list of PIL Images, each is a view of the depth map of the mesh"""
+ 	Returns a list of PIL Images, each is a view of the mesh with the texture applied, and a tensot, which is a collection of the depth maps of the mesh"""
 	uvp_app = prepare_uvp(tex_app_path, mesh_path_app)
 	set_cameras(uvp_app, camera_centers, camera_azims=camera_azims)
  
@@ -73,6 +74,5 @@ def get_views_and_depth(tex_app_path, mesh_path_app, camera_azims=[-180, -135, -
 	app_views = [tensor_to_image(view[:-1]) for view in app_views]
  
 	conditional_images, _ = get_conditioning_images(uvp_app, height, cond_type=cond_type)
-	conditional_images = [tensor_to_image(image) for image in conditional_images]
 	
 	return app_views, conditional_images

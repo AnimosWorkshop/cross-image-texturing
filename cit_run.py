@@ -2,6 +2,7 @@ from src.cit_configs import *
 opt = parse_config()
 
 
+from src.cit_utils import tensor_to_image
 import os
 from os.path import join, isdir, abspath, dirname, basename, splitext
 from typing import List
@@ -42,20 +43,27 @@ def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:
 	for i, image in enumerate(image_list):
 		image.save(join(output_dir, f"{base_name}_{i}.png"))
 
-def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, cond_type, camera_azims=None):
+def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed,invert_with_controlnet=True, cond_type="depth", camera_azims=None):
 	from cit_invert import get_views_and_depth
 	from argparse import Namespace
-	from inversion_with_controlnet import run
+	if invert_with_controlnet:
+		from inversion_with_controlnet import run
+	else:
+		from inversion_save_latents_wo_cn import run
  
 	inversion_dir, cond_dir, data_dir = make_dirs_for_app_proccessing(output_dir)
+	cond_app_path = join(cond_dir, "cond_app.pt")
  
 	print(f"Saving appearance views to {data_dir}")
 	print(f"Saving appearance conditioning images to {cond_dir}")
 	print(f"Saving inverted appearance latents to {inversion_dir}")
  
-	app_views, app_cond_images = get_views_and_depth(tex_app_path=tex_app, mesh_path_app=mesh_app, camera_azims=camera_azims, cond_type=cond_type)
+	app_views, app_conds = get_views_and_depth(tex_app_path=tex_app, mesh_path_app=mesh_app, camera_azims=camera_azims, cond_type=cond_type)
 	save_list_of_images("view", app_views, data_dir)
-	save_list_of_images("cond", app_cond_images, cond_dir)
+ 
+	torch.save(app_conds, cond_app_path)
+	depth_conditional_images = [tensor_to_image(image) for image in app_conds]
+	save_list_of_images("cond", depth_conditional_images, cond_dir)
 
 
 	# Create opt object directly
@@ -70,10 +78,10 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, cond_
 		inversion_prompt=prompt,
 		lora_weights_path=None,
 		square_size=False,
+		extract_reverse=False,
 	)
-	recon_latents_path = run(opt)
- 
-	return recon_latents_path, cond_dir
+	recon_latents_path = run(opt) # Should look like "inversion/latents.pt"
+	return recon_latents_path, cond_app_path
 
 
 
@@ -81,10 +89,14 @@ if opt.mesh_config_relative:
 	mesh_path = join(dirname(opt.config), opt.mesh)
 	mesh_path_app = join(dirname(opt.config), opt.mesh_app)
 	tex_app = join(dirname(opt.config), opt.tex_app)
+	latents_save_path = join(dirname(opt.config), opt.latents_save_path)
+	cond_app_path = join(dirname(opt.config), opt.cond_app_path)
 else:
 	mesh_path = abspath(opt.mesh)
 	mesh_path_app = abspath(opt.mesh_app)
 	tex_app = abspath(opt.tex_app)
+	latents_save_path = abspath(opt.latents_save_path)
+	cond_app_path = abspath(opt.cond_app_path)
 
 # app = appearance
 
@@ -144,14 +156,13 @@ model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
 
 
-if opt.latents_load:
-	latents_save_path = opt.latents_save_path
-	cond_app_path = opt.cond_app_path
+if not opt.latents_load:
+	print("Calculating new inverted latents and appearance conditioning images.")
+	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, opt.invert_with_controlnet, opt.cond_type, opt.camera_azims)
 else:
-	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, opt.cond_type, opt.camera_azims)
+    print("Using provided latents and appearance conditioning images.")
 
 # Run the SyncMVD pipeline
-
 result_tex_rgb, textured_views, v = model.pipe(
 	prompt=opt.prompt,
 	height=opt.latent_view_size*8,

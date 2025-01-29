@@ -6,6 +6,7 @@ import numpy as np
 import math
 import random
 import torch
+import psutil
 import copy
 from torch import functional as F
 from torch import nn
@@ -520,7 +521,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
 			torch.save(conditioning_images_app, cond_app_path)
 		else:
-			conditioning_images_app = torch.load(cond_app_path)
+			conditioning_images_app = torch.load(cond_app_path).to(torch.float16)
 
 		# 5. Prepare timesteps
 		self.scheduler.set_timesteps(num_inference_steps, device=device)
@@ -549,32 +550,33 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# CIT
 		if not latents_load:
-			noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
-			app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
+			raise Exception(f'We should never get to here, since appearance latents should be calculated outside the pipe, and then loaded.')
+			# noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
+			# app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
    
-			# CIT DBG - TODO remove this
-			show_views(app_views, self.intermediate_dir)
-			save_all_views(app_views, self.intermediate_dir)
+			# # CIT DBG - TODO remove this
+			# show_views(app_views, self.intermediate_dir)
+			# save_all_views(app_views, self.intermediate_dir)
    
-			foregrounds_app = [view[:-1] for view in app_views]
-			masks_app = [view[-1:] for view in app_views]
-			composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
-			latents_app = []
-			for i in range(len(self.camera_poses)):
-				image_tensor = composited_tensor_app[i]
-				# First index here is to grab the correct variable, second is to get the first(?) timestep
-				latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, cfg=app_transfer_model.config)[0][0])
-			latents_app = torch.stack(latents_app)
-			torch.save(latents_app, latents_save_path)
-			# Cleanup
-			del(noise_backgrounds)
-			del(app_views)
-			del(foregrounds_app)
-			del(masks_spp)
-			del(composited_tensor_app)
-			del(self.uvp_app)
+			# foregrounds_app = [view[:-1] for view in app_views]
+			# masks_app = [view[-1:] for view in app_views]
+			# composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
+			# latents_app = []
+			# for i in range(len(self.camera_poses)):
+			# 	image_tensor = composited_tensor_app[i]
+			# 	# First index here is to grab the correct variable, second is to get the first(?) timestep
+			# 	latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, cfg=app_transfer_model.config)[0][0])
+			# latents_app = torch.stack(latents_app)
+			# torch.save(latents_app, latents_save_path)
+			# # Cleanup
+			# del(noise_backgrounds)
+			# del(app_views)
+			# del(foregrounds_app)
+			# del(masks_spp)
+			# del(composited_tensor_app)
+			# del(self.uvp_app)
 		else:
-			latents_app = torch.load(latents_save_path)
+			latents_app = torch.load(latents_save_path).to(torch.float16)
    
 		########################################################################################
 		### Right now, latents_app is the noisiest latent: the shape is [10, 4, 64, 64] ########
@@ -601,10 +603,11 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		background_colors = [random.choice(list(color_constants.keys())) for i in range(len(self.camera_poses))]
 		dbres_sizes_list = []
 		mbres_size_list = []
+		# with torch.autocast(device_type=self._execution_device, dtype=torch.float16):
 		with self.progress_bar(total=num_inference_steps) as progress_bar:
 			for i, t in enumerate(timesteps):
 				print(f"{datetime.now()}: iteration {i}, timestep {t}")
-
+				print(f"Memory Usage: {(psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)):.2f} MB")
 				# mix prompt embeds according to azim angle
 				positive_prompt_embeds = [azim_prompt(prompt_embed_dict, pose) for pose in self.camera_poses]
 				positive_prompt_embeds = torch.stack(positive_prompt_embeds, axis=0)
@@ -614,8 +617,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 
 				# expand the latents if we are doing classifier free guidance
-				latent_model_input = self.scheduler.scale_model_input(latents, t).to(torch.float16)
-				latent_model_input_app = self.scheduler.scale_model_input(latents_app[i], t)
+				latent_model_input = self.scheduler.scale_model_input(latents, t).to(torch.float16).to(self._execution_device)
+				latent_model_input_app = self.scheduler.scale_model_input(latents_app[i], t).to(torch.float16).to(self._execution_device)
 
 				'''
 					Use groups to manage prompt and results
@@ -630,9 +633,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 				for prompt_tag, prompt_embeds in prompt_embeds_groups.items(): # Lidor asks: how many times does this loop run?
 					if prompt_tag == "positive" or not guess_mode:
 						# controlnet(s) inference
-						control_model_input = latent_model_input
-						control_model_input_app = latent_model_input_app
-						controlnet_prompt_embeds = prompt_embeds
+						if self._execution_device == "cpu": #TODO delete this
+							print("wtf")
+							exit(1)
+						control_model_input = latent_model_input.to(self._execution_device).to(torch.float16)
+						control_model_input_app = latent_model_input_app.to(self._execution_device).to(torch.float16)
+						controlnet_prompt_embeds = prompt_embeds.to(self._execution_device).to(torch.float16)
 
 						if isinstance(controlnet_keep[i], list):
 							cond_scale = [c * s for c, s in zip(controlnet_conditioning_scale, controlnet_keep[i])]
@@ -758,7 +764,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						model_output=noise_pred, 
 						timestep=t,
 						prev_t=prev_t,
-						sample=latents, 
+						sample=latents.to(self._execution_device), 
 						texture=latent_tex,
 						return_dict=True, 
 						main_views=[], 
@@ -771,7 +777,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						model_output=noise_pred_app, 
 						timestep=t,
 						prev_t=prev_t,
-						sample=latents_app[i], 
+						sample=latents_app[i].to(self._execution_device), 
 						texture=latent_tex,
 						return_dict=True, 
 						main_views=[], 

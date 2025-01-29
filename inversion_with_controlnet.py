@@ -123,7 +123,8 @@ class Preprocess(nn.Module):
         timesteps = reversed(self.scheduler.timesteps)
         mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
-            for i, t in enumerate(tqdm(timesteps)):
+            # for i, t in enumerate(tqdm(timesteps)):
+            for i, t in enumerate(timesteps):
                 cond_batch = cond.repeat(latent.shape[0], 1, 1)
 
                 alpha_prod_t = self.scheduler.alphas_cumprod[t]
@@ -164,7 +165,8 @@ class Preprocess(nn.Module):
         timesteps = self.scheduler.timesteps
         mid = []
         with torch.autocast(device_type='cuda', dtype=torch.float32):
-            for i, t in enumerate(tqdm(timesteps)):
+            # for i, t in enumerate(tqdm(timesteps)):
+            for i, t in enumerate(timesteps):
                     cond_batch = cond.repeat(x.shape[0], 1, 1)
                     alpha_prod_t = self.scheduler.alphas_cumprod[t]
                     alpha_prod_t_prev = (
@@ -264,11 +266,11 @@ def run(opt : argparse.Namespace):
     print(images_path)
 
     recons = []
+    model = Preprocess(device, sd_version=opt.sd_version, hf_key=None, lora_weights_path=opt.lora_weights_path)
     for image_path, control_path in tqdm(zip(images_path, control_images_path)):
         image_name = os.path.basename(image_path)
         save_path = os.path.join(opt.save_dir, image_name.replace(".png", ".pt"))
 
-        model = Preprocess(device, sd_version=opt.sd_version, hf_key=None, lora_weights_path=opt.lora_weights_path)
         recon_image, recon_proccess = model.extract_latents(data_path=image_path, # CIT uncomment this line
         # recon_image = model.extract_latents(data_path=image_path, # CIT comment this line
                                              control_path=control_path,
@@ -283,7 +285,7 @@ def run(opt : argparse.Namespace):
         
         T.ToPILImage()(recon_image[0]).save(os.path.join(opt.save_dir, f"recon_{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')}.jpg"))
         del recon_image
-        del model
+        # del model
         gc.collect()
         torch.cuda.empty_cache()
 

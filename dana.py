@@ -7,7 +7,7 @@ python inversion_save_latents_wo_cn.py \
     --save_dir /home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/save/{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')} \
     --sd_version 1.5 \
     --seed 42 \
-    --steps 10 \
+    --steps 3 \
     --inversion_prompt "Portrait photo of Kratos, god of war." \
     --extract-reverse
 '''
@@ -19,30 +19,30 @@ python inversion_with_controlnet.py \
     --save_dir /home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/save/{datetime.now().strftime('%d.%m.%Y-%H:%M:%S')} \
     --sd_version 1.5 \
     --seed 42 \
-    --steps 10 \
+    --steps 3 \
     --inversion_prompt "Portrait photo of Kratos, god of war." \
 '''
 
-# if __name__ == '__main__':
-#     os.system(cmd_inversion_with_controlnet)
-#     # os.system(cmd)
+if __name__ == '__main__':
+    os.system(cmd_inversion_with_controlnet)
+    # os.system(cmd)
 
 
-from argparse import Namespace
-from inversion_with_controlnet import run
+# from argparse import Namespace
+# from inversion_with_controlnet import run
 
-# Create opt object directly
-opt = Namespace(
-    data_path='/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/data/',
-    control_image_path='/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/cond/',
-    save_dir=f'/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/save/{datetime.now().strftime("%d.%m.%Y-%H:%M:%S")}',
-    sd_version='1.5',
-    seed=42,
-    steps=10,
-    save_steps=1000,
-    inversion_prompt="Portrait photo of Kratos, god of war.",
-    square_size=False,
-    lora_weights_path=None
-)
+# # Create opt object directly
+# opt = Namespace(
+#     data_path='/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/data/',
+#     control_image_path='/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/cond/',
+#     save_dir=f'/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor/save/{datetime.now().strftime("%d.%m.%Y-%H:%M:%S")}',
+#     sd_version='1.5',
+#     seed=42,
+#     steps=10,
+#     save_steps=1000,
+#     inversion_prompt="Portrait photo of Kratos, god of war.",
+#     square_size=False,
+#     lora_weights_path=None
+# )
 
-run(opt)
+# run(opt)
