@@ -383,9 +383,14 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		app_transfer_model=None,
 	):
 		
-		if latents_load:
-			if (not os.path.isfile(latents_save_path)) or (not os.path.isfile(cond_app_path)):
-				latents_load = False
+		# if latents_load:
+		# 	if (not os.path.isfile(latents_save_path)) or (not os.path.isfile(cond_app_path)):
+		# 		latents_load = False
+		if (not os.path.isfile(latents_save_path)) or (not os.path.isfile(cond_app_path)) or (not latents_load):  
+			print(f"{latents_save_path = }")
+			print(f"{cond_app_path = }")
+			print(f"{latents_load = }")
+			raise FileNotFoundError("Latents save path or cond app path not found")
 		
 
 		# Setup pipeline settings
@@ -521,6 +526,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			conditioning_images_app = conditioning_images_app.type(prompt_embeds.dtype)
 			torch.save(conditioning_images_app, cond_app_path)
 		else:
+			print(f"Loading conditioning images from {cond_app_path}")
 			conditioning_images_app = torch.load(cond_app_path).to(torch.float16)
 
 		# 5. Prepare timesteps
@@ -654,9 +660,12 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						mid_block_res_sample_list = []
 
 						# CIT - modify batches
-						model_input_batches = [torch.stack((control_model_input[i], control_model_input[i], control_model_input_app[i])).to(torch.float16) for i in range(latents.shape[0])]
-						prompt_embeds_batches = [torch.stack((embed, embed, embed)).to(torch.float16) for embed in controlnet_prompt_embeds]
-						conditioning_images_batches = [torch.stack((conditioning_images[i], conditioning_images[i], conditioning_images_app[i])) for i in range(conditioning_images.shape[0])]
+						model_input_batches = [torch.stack((control_model_input[i].to(torch.float16).to(self._execution_device), control_model_input[i].to(torch.float16).to(self._execution_device), control_model_input_app[i].to(torch.float16).to(self._execution_device))).to(torch.float16).to(self._execution_device) for i in range(latents.shape[0])]
+						prompt_embeds_batches = [torch.stack((embed, embed, embed)).to(torch.float16).to(self._execution_device) for embed in controlnet_prompt_embeds]
+
+						to_cuda = lambda x: x.to(torch.float16).to(self._execution_device)
+						# conditioning_images_batches = [torch.stack((conditioning_images[i].to(torch.float16).to(self._execution_device), conditioning_images[i].to(torch.float16).to(self._execution_device), conditioning_images_app[i].to(torch.float16).to(self._execution_device))) for i in range(conditioning_images.shape[0])]
+						conditioning_images_batches = [torch.stack((to_cuda(conditioning_images[i]), to_cuda(conditioning_images[i]), to_cuda(conditioning_images_app[i]))) for i in range(conditioning_images.shape[0])]
 
 						for model_input_batch ,prompt_embeds_batch, conditioning_images_batch \
 							in zip (model_input_batches, prompt_embeds_batches, conditioning_images_batches):

@@ -170,6 +170,22 @@ from src.SyncMVD.src.utils import decode_latents
 
 lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 
+def concat_images_horizontally(images):
+    # Get total width and maximum height
+    total_width = sum(img.width for img in images)
+    max_height = max(img.height for img in images)
+
+    # Create a new blank image with the right size
+    concatenated_img = Image.new("RGB", (total_width, max_height))
+
+    # Paste images side by side
+    x_offset = 0
+    for img in images:
+        concatenated_img.paste(img, (x_offset, 0))
+        x_offset += img.width
+
+    return concatenated_img
+
 def image_to_tensor(image):
     return (torch.from_numpy(np.array(image)) / 255.0).permute(2, 0, 1)
 

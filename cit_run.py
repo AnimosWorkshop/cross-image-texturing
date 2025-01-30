@@ -1,20 +1,15 @@
 from src.cit_configs import *
 opt = parse_config()
 
-
+from src.cit_utils import concat_images_horizontally, show_views
+import torch
 from src.cit_utils import tensor_to_image
 import os
 from os.path import join, isdir, abspath, dirname, basename, splitext
 from typing import List
 from IPython.display import display
 from datetime import datetime
-import torch
-from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
-from diffusers import DDPMScheduler, UniPCMultistepScheduler
-from diffusers.training_utils import set_seed
-from src.pipeline import StableSyncMVDPipeline
 from shutil import copy
-from src.CIA.appearance_transfer_model import AppearanceTransferModel
 from PIL import Image
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
@@ -35,7 +30,7 @@ def make_dirs_for_app_proccessing(output_dir):
   
 	return inversion_dir, cond_dir, data_dir
 
-def save_list_of_tensors(base_name:str, tensor_list:List[torch.Tensor], output_dir:str):
+def save_list_of_tensors(base_name:str, tensor_list, output_dir:str):
 	for i, tensor in enumerate(tensor_list):
 		torch.save(tensor, join(output_dir, f"{base_name}_{i}.pt"))
 
@@ -43,7 +38,7 @@ def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:
 	for i, image in enumerate(image_list):
 		image.save(join(output_dir, f"{base_name}_{i}.png"))
 
-def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed,invert_with_controlnet=True, cond_type="depth", camera_azims=None):
+def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_path=None, invert_with_controlnet=True, cond_type="depth", camera_azims=None):
 	from cit_invert import get_views_and_depth
 	from argparse import Namespace
 	if invert_with_controlnet:
@@ -58,10 +53,9 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed,invert
 	print(f"Saving appearance conditioning images to {cond_dir}")
 	print(f"Saving inverted appearance latents to {inversion_dir}")
  
-	app_views, app_conds = get_views_and_depth(tex_app_path=tex_app, mesh_path_app=mesh_app, camera_azims=camera_azims, cond_type=cond_type)
+	app_views, app_conds = get_views_and_depth(tex_app_path=tex_app, mesh_path_app=mesh_app, camera_azims=camera_azims, cond_type=cond_type, bg_path=bg_path)
 	save_list_of_images("view", app_views, data_dir)
- 
-	torch.save(app_conds, cond_app_path)
+	
 	depth_conditional_images = [tensor_to_image(image) for image in app_conds]
 	save_list_of_images("cond", depth_conditional_images, cond_dir)
 
@@ -81,6 +75,10 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed,invert
 		extract_reverse=False,
 	)
 	recon_latents_path = run(opt) # Should look like "inversion/latents.pt"
+ 
+	concat_images_horizontally(app_views).save(join(data_dir, "all_views.png"))
+	torch.save(app_conds, cond_app_path)
+ 
 	return recon_latents_path, cond_app_path
 
 
@@ -91,12 +89,14 @@ if opt.mesh_config_relative:
 	tex_app = join(dirname(opt.config), opt.tex_app)
 	latents_save_path = join(dirname(opt.config), opt.latents_save_path)
 	cond_app_path = join(dirname(opt.config), opt.cond_app_path)
+	bg_path = join(dirname(opt.config), opt.bg_path)
 else:
 	mesh_path = abspath(opt.mesh)
 	mesh_path_app = abspath(opt.mesh_app)
 	tex_app = abspath(opt.tex_app)
 	latents_save_path = abspath(opt.latents_save_path)
 	cond_app_path = abspath(opt.cond_app_path)
+	bg_path = abspath(opt.bg_path)
 
 # app = appearance
 
@@ -122,8 +122,23 @@ if not isdir(output_dir):
 else:
 	print(f"Results exist in the output directory, use time string to avoid name collision.")
 	exit(0)
-
+ 
 print(f"Saving to {output_dir}")
+if not opt.latents_load:
+	print("Calculating new inverted latents and appearance conditioning images.")
+	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, bg_path, opt.invert_with_controlnet, opt.cond_type, opt.camera_azims)
+	print("Done calculating new inverted latents and appearance conditioning images.")
+else:
+    print("Using provided latents and appearance conditioning images.")
+
+
+# Slow imports here
+from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
+from diffusers import DDPMScheduler, UniPCMultistepScheduler
+from diffusers.training_utils import set_seed
+from src.pipeline import StableSyncMVDPipeline
+from src.CIA.appearance_transfer_model import AppearanceTransferModel
+
 
 copy(opt.config, join(output_dir, "config.yaml"))
 
@@ -156,11 +171,7 @@ model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
 
 
-if not opt.latents_load:
-	print("Calculating new inverted latents and appearance conditioning images.")
-	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, opt.invert_with_controlnet, opt.cond_type, opt.camera_azims)
-else:
-    print("Using provided latents and appearance conditioning images.")
+
 
 # Run the SyncMVD pipeline
 result_tex_rgb, textured_views, v = model.pipe(
