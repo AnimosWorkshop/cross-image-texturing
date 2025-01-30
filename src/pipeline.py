@@ -751,7 +751,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					# Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
 					# noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
 
-				self.uvp.to(self._execution_device)
+				self.uvp.to(self._execution_device) #TODO wtf is going here? maybe: self.uvp = self.uvp.to(self._execution_device) ?
 				# compute the previous noisy sample x_t -> x_t-1
 				# Multi-View step or individual step
 				current_exp = ((exp_end-exp_start) * i / num_inference_steps) + exp_start
@@ -765,7 +765,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						timestep=t,
 						prev_t=prev_t,
 						sample=latents.to(self._execution_device), 
-						texture=latent_tex,
+						texture=latent_tex.to(self._execution_device),
 						return_dict=True, 
 						main_views=[], 
 						exp=current_exp,
@@ -778,7 +778,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 						timestep=t,
 						prev_t=prev_t,
 						sample=latents_app[i].to(self._execution_device), 
-						texture=latent_tex,
+						texture=latent_tex.to(self._execution_device),
 						return_dict=True, 
 						main_views=[], 
 						exp=current_exp,
@@ -800,8 +800,8 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 					intermediate_results.append((latents.to("cpu"), pred_original_sample.to("cpu")))
 					intermediate_results_app.append((latents_app[i].to("cpu"), pred_original_sample_app.to("cpu")))
 				else:
-					step_results = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=True)
-					step_results_app = self.scheduler.step(noise_pred_app, t, latents_app[i], **extra_step_kwargs, return_dict=True)
+					step_results = self.scheduler.step(noise_pred.to(self._execution_device), t, latents.to(self._execution_device), **extra_step_kwargs, return_dict=True)
+					step_results_app = self.scheduler.step(noise_pred_app.to(self._execution_device), t, latents_app[i].to(self._execution_device), **extra_step_kwargs, return_dict=True)
 
 					pred_original_sample = step_results["pred_original_sample"]
 					latents = step_results["prev_sample"]
