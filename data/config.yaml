@@ -13,7 +13,6 @@ log_interval: 1
 tex_fast_preview: True
 view_fast_preview: True
 latents_save_path: "./recons_w_cn.pt"
-# latents_load: True
-latents_load: False
-invert_with_controlnet: False
+latents_load: True
+invert_with_controlnet: True
 cond_app_path: "./cond_app.pt"
