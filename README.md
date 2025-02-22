@@ -1,3 +1,25 @@
+# A quick guide-through to our codebase
+'cit_run.py' is the mainfile.
+Inversion is performed in 'inversion_with_controlnet.py', using utilities from 'cit_invert.py'.
+The configuration is read using 'cit_configs.py', and there goes some documentation for how should the config.yaml file look like.
+There are a few experiment directores: animal, dragon, shoe, data (==face), in which you'll find the destination and the source mesh, along with suplementary files (mtl, obj, texture etc). 
+One might want to prepare a bg.png image in 512x512 if he wants to use custom bg for pre-inversion source-mesh rendering.
+
+The conda environment used is at "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/envs/lys", with the conda itself running using "/home/ML_courses/03683533_2024/lidor_yael_snir/miniconda3/condabin/conda".
+The environment is so complex (the SMVD premitive had many troubles with its env), so we don't bother exporting it to dependencies - since it won't work. You just have to copy it as-is.
+
+We pre-made some 'run_x_experiment.slurm', where x is the name of the experiment. Just sbatch it and you are good to go. results are shown in the relevant experiment's dir.
+
+Some inversions are already make and save, so we have a "load_latents" feature.
+If you do wish to perform the inversion on your own, disable it in the config file.
+Since the data meshs come from various sources, there sometimes are problems with unexpected rendering of the source mesh (app_mesh). One can wintess it when looking at the views within the 'data' folder that is created before the inversion. To fix it, try tweaking the  'autouv' argument passed to the 'load_mesh'\'load_glb_mesh' inside the 'prepare_uvp' function (change it to True, or to False). All can be found in 'cit_invert.py'.
+We do noticed that .glb mesh_app work better.
+
+A curious one might enjoy to take a look at 'cit_utils.py', where we have utilities to show latents and etc.
+In 'show_latents()', just pass the full path to the .pt file (e.g. "/home/ML_courses/03683533_2024/lidor_yael_snir/final/cross-image-texturing/data/latents_app.pt"), and take a look at the 'lidor' directory - the result is saved to there.
+
+Enjoy!
+
 # Main Structure
 
 Here we represent the structure of both works for future reference.

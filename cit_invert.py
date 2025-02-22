@@ -62,7 +62,6 @@ def prepare_uvp(tex_app_path, mesh_path_app, texture_rgb_size_app = 1024, device
 
 def reshape_latents(latents):
     """
-    I want only the 100 noisy latents (all timesteps but 1)
 	I want the noise to be at index 0 and clear is at the last index
 	I want to access the latents by [timestep, batch, channel, x, y]
     """
