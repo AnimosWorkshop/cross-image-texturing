@@ -1,5 +1,0 @@
-newmtl TopN.001
-Kd 0.800000 0.800000 0.800000
-map_Kd textures/TopN.001_diffuse.png
-d 1.000000
-illum 1

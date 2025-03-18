@@ -1,0 +1,21 @@
+mesh: "./dog.obj"
+mesh_app: "./tiger.glb"
+tex_app: "./tiger_texture.jpg"
+mtl_app: "./tiger.mtl"
+mesh_config_relative: True    # mesh is placed relative to the config file
+use_mesh_name: False
+# prompt: "a stuffed tiger with blue eyes and a white background."
+prompt: "an animal."
+steps: 100
+cond_type: "depth"
+seed: 1
+mesh_scale: 1
+log_interval: 1
+tex_fast_preview: True
+view_fast_preview: True
+latents_load: True
+# latents_load: False
+invert_with_controlnet: True
+bg_path: "./bg.png"
+latents_save_path: "./recons.pt"
+cond_app_path: "./cond_app.pt"

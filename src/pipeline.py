@@ -36,16 +36,16 @@ from diffusers.models.attention_processor import Attention, AttentionProcessor
 from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-from src.project import UVProjection as UVP
+from project import UVProjection as UVP
 
 
-from src.SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
-from src.SyncMVD.src.syncmvd.prompt import *
-from src.SyncMVD.src.utils import *
+from SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
+from SyncMVD.src.syncmvd.prompt import *
+from SyncMVD.src.utils import *
 
-from src.CIA.appearance_transfer_model import AppearanceTransferModel
-from src.cit_configs import Range, RunConfig
-from src.cit_utils import invert_images, show_latents, step_tex, show_views, save_all_views
+from CIA.appearance_transfer_model import AppearanceTransferModel
+from cit_configs import Range, RunConfig
+from cit_utils import show_latents, step_tex, show_views, save_all_views
 
 from datetime import datetime
 
@@ -557,30 +557,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# CIT
 		if not latents_load:
 			raise Exception(f'We should never get to here, since appearance latents should be calculated outside the pipe, and then loaded.')
-			# noise_backgrounds = torch.normal(0, 1, (len(self.uvp_app.cameras), 3, 512, 512), device=self._execution_device)
-			# app_views = self.uvp_app.render_textured_views() # List of 10 tensors, each is 1536x1536, but with 4 channels (last channel is mask)
-   
-			# # CIT DBG - TODO remove this
-			# show_views(app_views, self.intermediate_dir)
-			# save_all_views(app_views, self.intermediate_dir)
-   
-			# foregrounds_app = [view[:-1] for view in app_views]
-			# masks_app = [view[-1:] for view in app_views]
-			# composited_tensor_app = composite_rendered_view(self.scheduler, noise_backgrounds, foregrounds_app, masks_app, timesteps[0]+1) # shape is [10, 3, 1536, 1536]
-			# latents_app = []
-			# for i in range(len(self.camera_poses)):
-			# 	image_tensor = composited_tensor_app[i]
-			# 	# First index here is to grab the correct variable, second is to get the first(?) timestep
-			# 	latents_app.append(invert_images(app_transfer_model.pipe, app_image=image_tensor, cfg=app_transfer_model.config)[0][0])
-			# latents_app = torch.stack(latents_app)
-			# torch.save(latents_app, latents_save_path)
-			# # Cleanup
-			# del(noise_backgrounds)
-			# del(app_views)
-			# del(foregrounds_app)
-			# del(masks_spp)
-			# del(composited_tensor_app)
-			# del(self.uvp_app)
 		else:
 			latents_app = torch.load(latents_save_path).to(torch.float16)
    

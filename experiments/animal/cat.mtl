@@ -1,0 +1,5 @@
+newmtl mesh0882mat
+Kd 0.800000 0.800000 0.800000
+map_Kd textures/mesh0882mat_diffuse.png
+d 1.000000
+illum 1

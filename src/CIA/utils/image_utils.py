@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 import numpy as np
 from PIL import Image
 
-from src.cit_configs import RunConfig
+from cit_configs import RunConfig
 
 
 def load_images(cfg: RunConfig, save_path: Optional[pathlib.Path] = None) -> Tuple[Image.Image, Image.Image]:
