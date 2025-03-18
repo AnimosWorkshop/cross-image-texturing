@@ -1,5 +1,0 @@
-newmtl Tiger_cub
-Kd 0.800000 0.800000 0.800000
-map_Kd textures/Tiger_cub_diffuse.jpg
-d 1.000000
-illum 1
