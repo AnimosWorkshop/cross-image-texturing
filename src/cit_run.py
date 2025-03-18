@@ -44,7 +44,8 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_pa
 	if invert_with_controlnet:
 		from inversion_with_controlnet import run
 	else:
-		from inversion_save_latents_wo_cn import run
+		raise NotImplementedError("Inversion without controlnet is no longer supported.")
+		# from inversion_save_latents_wo_cn import run
  
 	inversion_dir, cond_dir, data_dir = make_dirs_for_app_proccessing(output_dir)
 	cond_app_path = join(cond_dir, "cond_app.pt")
@@ -224,4 +225,4 @@ result_tex_rgb, textured_views, v = model.pipe(
 	app_transfer_model=model,
 	)
 
-display(v)
+display(v) # what is v?
