@@ -1,9 +1,14 @@
+from datetime import datetime
+def log(msg: str):
+    print(f"{datetime.now().strftime('%d%b%Y-%H%M%S')} cit_run: {msg}")
+
+import torch
+log("imported torch")
+
 from cit_configs import *
 opt = parse_config()
+log("parsed config")
 
-from cit_utils import concat_images_horizontally, show_views
-import torch
-from cit_utils import tensor_to_image
 import os
 from os.path import join, isdir, abspath, dirname, basename, splitext
 from typing import List
@@ -14,6 +19,7 @@ from PIL import Image
 
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
+# 'app' is a shortcut for 'appearance'
 
 
 def make_dirs_for_app_proccessing(output_dir):
@@ -39,6 +45,7 @@ def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:
 		image.save(join(output_dir, f"{base_name}_{i}.png"))
 
 def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_path=None, invert_with_controlnet=True, cond_type="depth", camera_azims=None):
+	from cit_utils import tensor_to_image, concat_images_horizontally
 	from cit_invert import get_views_and_depth
 	from argparse import Namespace
 	if invert_with_controlnet:
@@ -82,55 +89,63 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_pa
  
 	return recon_latents_path, cond_app_path
 
+def get_paths(opt):
+	if opt.mesh_config_relative:
+		mesh_path = join(dirname(opt.config), opt.mesh)
+		mesh_path_app = join(dirname(opt.config), opt.mesh_app)
+		tex_app = join(dirname(opt.config), opt.tex_app)
+		latents_save_path = join(dirname(opt.config), opt.latents_save_path)
+		cond_app_path = join(dirname(opt.config), opt.cond_app_path)
+		bg_path = join(dirname(opt.config), opt.bg_path)
+	else:
+		mesh_path = abspath(opt.mesh)
+		mesh_path_app = abspath(opt.mesh_app)
+		tex_app = abspath(opt.tex_app)
+		latents_save_path = abspath(opt.latents_save_path)
+		cond_app_path = abspath(opt.cond_app_path)
+		bg_path = abspath(opt.bg_path)
+  
+	if opt.output:
+		output_root = abspath(opt.output)
+	else:
+		output_root = dirname(opt.config)
+  
+	return mesh_path, mesh_path_app, tex_app, latents_save_path, cond_app_path, bg_path, output_root
+
+def make_output_dir(output_root, opt):
+	output_name_components = []
+	if opt.prefix and opt.prefix != "":
+		output_name_components.append(opt.prefix)
+	if opt.use_mesh_name:
+		mesh_name = splitext(basename(mesh_path))[0].replace(" ", "_")
+		output_name_components.append(mesh_name)
+
+	if opt.timeformat and opt.timeformat != "":
+		output_name_components.append(datetime.now().strftime(opt.timeformat))
+	output_name = "_".join(output_name_components)
+	output_dir = join(output_root, output_name)
+
+	if not isdir(output_dir):
+		os.mkdir(output_dir)
+	else:
+		print(f"Results exist in the output directory, use time string to avoid name collision.")
+		exit(0)
+	
+	return output_dir
 
 
-if opt.mesh_config_relative:
-	mesh_path = join(dirname(opt.config), opt.mesh)
-	mesh_path_app = join(dirname(opt.config), opt.mesh_app)
-	tex_app = join(dirname(opt.config), opt.tex_app)
-	latents_save_path = join(dirname(opt.config), opt.latents_save_path)
-	cond_app_path = join(dirname(opt.config), opt.cond_app_path)
-	bg_path = join(dirname(opt.config), opt.bg_path)
-else:
-	mesh_path = abspath(opt.mesh)
-	mesh_path_app = abspath(opt.mesh_app)
-	tex_app = abspath(opt.tex_app)
-	latents_save_path = abspath(opt.latents_save_path)
-	cond_app_path = abspath(opt.cond_app_path)
-	bg_path = abspath(opt.bg_path)
+mesh_path, mesh_path_app, tex_app, latents_save_path, cond_app_path, bg_path, output_root = get_paths(opt)
+log("Got paths")
 
-# app = appearance
+output_dir = make_output_dir(output_root, opt)	
+print(f"cit_run: Saving to {output_dir}")
 
-if opt.output:
-	output_root = abspath(opt.output)
-else:
-	output_root = dirname(opt.config)
-
-output_name_components = []
-if opt.prefix and opt.prefix != "":
-	output_name_components.append(opt.prefix)
-if opt.use_mesh_name:
-	mesh_name = splitext(basename(mesh_path))[0].replace(" ", "_")
-	output_name_components.append(mesh_name)
-
-if opt.timeformat and opt.timeformat != "":
-	output_name_components.append(datetime.now().strftime(opt.timeformat))
-output_name = "_".join(output_name_components)
-output_dir = join(output_root, output_name)
-
-if not isdir(output_dir):
-	os.mkdir(output_dir)
-else:
-	print(f"Results exist in the output directory, use time string to avoid name collision.")
-	exit(0)
- 
-print(f"Saving to {output_dir}")
 if not opt.latents_load:
-	print("Calculating new inverted latents and appearance conditioning images.")
+	log("Calculating new inverted latents and appearance conditioning images.")
 	latents_save_path, cond_app_path = prepare_appearance(opt.prompt, opt.steps, tex_app, mesh_path_app, output_dir, opt.seed, bg_path, opt.invert_with_controlnet, opt.cond_type, opt.camera_azims)
-	print("Done calculating new inverted latents and appearance conditioning images.")
+	log("Done calculating new inverted latents and appearance conditioning images.")
 else:
-    print("Using provided latents and appearance conditioning images.")
+    log("Using provided latents and appearance conditioning images.")
 
 
 # Slow imports here
@@ -139,6 +154,8 @@ from diffusers import DDPMScheduler, UniPCMultistepScheduler
 from diffusers.training_utils import set_seed
 from pipeline import StableSyncMVDPipeline
 from CIA.appearance_transfer_model import AppearanceTransferModel
+
+log("Imported diffusers and CIA")
 
 
 copy(opt.config, join(output_dir, "config.yaml"))
@@ -170,7 +187,7 @@ model_cfg = RunConfig(opt.prompt)
 set_seed(model_cfg.seed)
 model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
-
+log("Model is set up")
 
 
 

@@ -10,3 +10,4 @@ export.sh
 holy_shit_that_works.png
 **/*.pt
 **/experiments/*/MVD*
+log/*
