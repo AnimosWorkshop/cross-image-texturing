@@ -36,16 +36,16 @@ from diffusers.models.attention_processor import Attention, AttentionProcessor
 from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-from src.project import UVProjection as UVP
+from project import UVProjection as UVP
 
 
-from src.SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
-from src.SyncMVD.src.syncmvd.prompt import *
-from src.SyncMVD.src.utils import *
+from SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
+from SyncMVD.src.syncmvd.prompt import *
+from SyncMVD.src.utils import *
 
-from src.CIA.appearance_transfer_model import AppearanceTransferModel
-from src.cit_configs import Range, RunConfig
-from src.cit_utils import invert_images, show_latents, step_tex, show_views, save_all_views
+from CIA.appearance_transfer_model import AppearanceTransferModel
+from cit_configs import Range, RunConfig
+from cit_utils import invert_images, show_latents, step_tex, show_views, save_all_views
 
 from datetime import datetime
 

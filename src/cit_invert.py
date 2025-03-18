@@ -1,10 +1,10 @@
 import os
 
 import torch
-from src.cit_utils import image_to_tensor, show_latents, tensor_to_image, show_views
-from src.project import UVProjection as UVP
+from cit_utils import image_to_tensor, show_latents, tensor_to_image, show_views
+from project import UVProjection as UVP
 from PIL import Image
-from src.pipeline import get_conditioning_images
+from pipeline import get_conditioning_images
 
 
 def get_extension(path):

@@ -2,11 +2,11 @@ from datetime import datetime
 import numpy as np
 from diffusers.utils import numpy_to_pil, randn_tensor
 import torch
-from src.SyncMVD.src.utils import decode_latents, get_rgb_texture
-from src.CIA.appearance_transfer_model import AppearanceTransferModel
+from SyncMVD.src.utils import decode_latents, get_rgb_texture
+from CIA.appearance_transfer_model import AppearanceTransferModel
 from PIL import Image
-from src.cit_configs import RunConfig
-from src.CIA.utils.ddpm_inversion import invert
+from cit_configs import RunConfig
+from CIA.utils.ddpm_inversion import invert
 
 
 ##################################
@@ -166,7 +166,7 @@ def step_tex(
 from datetime import datetime
 import numpy as np
 from diffusers.utils import numpy_to_pil
-from src.SyncMVD.src.utils import decode_latents
+from SyncMVD.src.utils import decode_latents
 
 lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/lidor_only/cross-image-texturing/lidor"
 

@@ -1,9 +1,9 @@
-from src.cit_configs import *
+from cit_configs import *
 opt = parse_config()
 
-from src.cit_utils import concat_images_horizontally, show_views
+from cit_utils import concat_images_horizontally, show_views
 import torch
-from src.cit_utils import tensor_to_image
+from cit_utils import tensor_to_image
 import os
 from os.path import join, isdir, abspath, dirname, basename, splitext
 from typing import List
@@ -136,8 +136,8 @@ else:
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, UniPCMultistepScheduler
 from diffusers.training_utils import set_seed
-from src.pipeline import StableSyncMVDPipeline
-from src.CIA.appearance_transfer_model import AppearanceTransferModel
+from pipeline import StableSyncMVDPipeline
+from CIA.appearance_transfer_model import AppearanceTransferModel
 
 
 copy(opt.config, join(output_dir, "config.yaml"))

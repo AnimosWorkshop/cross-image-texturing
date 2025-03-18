@@ -20,9 +20,9 @@ from pytorch3d.renderer import (
 	TexturesUV
 )
 
-from src.SyncMVD.src.renderer.geometry import HardGeometryShader
-from src.SyncMVD.src.renderer.shader import HardNChannelFlatShader
-from src.SyncMVD.src.renderer.voronoi import voronoi_solve
+from SyncMVD.src.renderer.geometry import HardGeometryShader
+from SyncMVD.src.renderer.shader import HardNChannelFlatShader
+from SyncMVD.src.renderer.voronoi import voronoi_solve
 
 
 # Pytorch3D based renderering functions, managed in a class

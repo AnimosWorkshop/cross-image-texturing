@@ -1,8 +1,8 @@
 import torch
 from diffusers import DDIMScheduler
 
-from src.CIA.models.stable_diffusion import CrossImageAttentionStableDiffusionPipeline
-from src.CIA.models.unet_2d_condition import FreeUUNet2DConditionModel
+from CIA.models.stable_diffusion import CrossImageAttentionStableDiffusionPipeline
+from CIA.models.unet_2d_condition import FreeUUNet2DConditionModel
 
 
 def get_stable_diffusion_model() -> CrossImageAttentionStableDiffusionPipeline:
