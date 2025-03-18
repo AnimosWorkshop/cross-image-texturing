@@ -8,5 +8,5 @@ src/SyncMVD/data/*
 *.pyc
 export.sh
 holy_shit_that_works.png
-*.pt
-*/experiments/*/MVD*
+**/*.pt
+**/experiments/*/MVD*
