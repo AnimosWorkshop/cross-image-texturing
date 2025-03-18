@@ -11,3 +11,4 @@ holy_shit_that_works.png
 **/*.pt
 **/experiments/*/MVD*
 log/*
+results/lidor/save/
