@@ -8,8 +8,8 @@ if __name__ == "__main__":
 
     script_content = f"""#! /bin/sh
 #SBATCH --job-name={name}_CIT
-#SBATCH --output=logs/{datetime.now().strftime('%d%b%Y-%H%M%S')}/{name}_CIT.out
-#SBATCH --error=logs/{datetime.now().strftime('%d%b%Y-%H%M%S')}/{name}_CIT.err
+#SBATCH --output=logs/{name}_at_{datetime.now().strftime('%H:%M:%S')}/{name}_CIT.out
+#SBATCH --error=logs/{name}_at_{datetime.now().strftime('%H:%M:%S')}/{name}_CIT.err
 #SBATCH --partition=killable
 #SBATCH --account=gpu-research
 #SBATCH --time=01:00:00

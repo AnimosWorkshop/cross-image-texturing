@@ -1,6 +1,11 @@
 from datetime import datetime
+# Store script start time
+script_start_time = datetime.now()
+
 def log(msg: str):
-    print(f"{datetime.now().strftime('%d%b%Y-%H%M%S')} cit_run: {msg}")
+    elapsed_time = datetime.now() - script_start_time
+    minutes, seconds = divmod(elapsed_time.total_seconds(), 60)
+    print(f"{datetime.now().strftime('%d%b%Y-%H%M%S')} (+{int(minutes)}m{int(seconds)}s) cit_run: {msg}")
 
 import torch
 log("imported torch")
@@ -138,7 +143,7 @@ mesh_path, mesh_path_app, tex_app, latents_save_path, cond_app_path, bg_path, ou
 log("Got paths")
 
 output_dir = make_output_dir(output_root, opt)	
-print(f"cit_run: Saving to {output_dir}")
+log(f"Saving to {output_dir}")
 
 if not opt.latents_load:
 	log("Calculating new inverted latents and appearance conditioning images.")
