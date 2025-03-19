@@ -23,7 +23,7 @@ from pytorch3d.renderer import (
 from SyncMVD.src.renderer.geometry import HardGeometryShader
 from SyncMVD.src.renderer.shader import HardNChannelFlatShader
 from SyncMVD.src.renderer.voronoi import voronoi_solve
-
+import numpy as np
 
 # Pytorch3D based renderering functions, managed in a class
 # Render size is recommended to be the same as your latent view size
@@ -487,3 +487,60 @@ class UVProjection():
 				map_list = getattr(self, list_name)
 				for i in range(len(map_list)):
 					map_list[i] = map_list[i].to(device)
+
+CAMERA_AZIMS=[-180, -135, -90, -45, 0, 45, 90, 135]
+CAMERA_CENTERS=None
+TOP_CAMERAS=True
+
+def default_cameras():
+	camera_poses = []
+	attention_mask=[]
+
+	cam_count = len(CAMERA_AZIMS)
+	front_view_diff = 360
+	back_view_diff = 360
+	front_view_idx = 0
+	back_view_idx = 0
+	for i, azim in enumerate(CAMERA_AZIMS):
+		if azim < 0:
+			azim += 360
+		camera_poses.append((0, azim))
+		attention_mask.append([(cam_count+i-1)%cam_count, i, (i+1)%cam_count])
+		if abs(azim) < front_view_diff:
+			front_view_idx = i
+			front_view_diff = abs(azim)
+		if abs(azim - 180) < back_view_diff:
+			back_view_idx = i
+			back_view_diff = abs(azim - 180)
+
+	# Add two additional cameras for painting the top surfaces
+	if TOP_CAMERAS:
+		camera_poses.append((30, 0))
+		camera_poses.append((30, 180))
+
+		attention_mask.append([front_view_idx, cam_count])
+		attention_mask.append([back_view_idx, cam_count+1])
+  
+	return camera_poses, attention_mask
+	
+
+def build_uvp(mesh_path, texture=None, texture_size=1024, render_size=512, sampling_mode="nearest", channels=3, device="cuda", camera_poses=None, camera_centers=None, mesh_transform={"scale":1}, mesh_autouv=False):
+	uvp = UVProjection(texture_size=texture_size, render_size=render_size, sampling_mode=sampling_mode, channels=channels, device=device)
+	if mesh_path.lower().endswith(".obj"):
+		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+	elif mesh_path.lower().endswith(".glb"):
+		# mesh_autouv=False
+		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+	else:
+		assert False, "The mesh file format is not supported. Use .obj or .glb."
+
+	if camera_poses is None:
+		camera_poses, _ = default_cameras()
+	uvp.set_cameras_and_render_settings(camera_poses, centers=camera_centers, camera_distance=4.0)
+ 
+	if texture:
+		texture_image = Image.open(texture) if type(texture) == str else texture
+		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
+		uvp.set_texture_map(texture_tensor)
+ 
+	return uvp
