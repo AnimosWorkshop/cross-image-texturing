@@ -50,6 +50,7 @@ def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:
 		image.save(join(output_dir, f"{base_name}_{i}.png"))
 
 def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_path=None, invert_with_controlnet=True, cond_type="depth", camera_azims=None):
+	"""Inverts the appearance of the object and saves the views and depth conditioning images."""
 	from cit_utils import tensor_to_image, concat_images_horizontally
 	from cit_invert import get_views_and_depth
 	from argparse import Namespace
@@ -153,14 +154,29 @@ else:
     log("Using provided latents and appearance conditioning images.")
 
 
+if opt.preview:
+	from cit_utils import show_latents, concat_images_vertically, show_mesh
+	app_depth = show_latents(cond_app_path, output_dir, save=False)
+	app_inverted = show_latents(latents_save_path, output_dir, save=False)
+	app_views = show_mesh(latents_save_path, output_dir, save=False, texture=tex_app)
+	target_depth = show_mesh(mesh_path, output_dir, save=False)
+	preview_img = concat_images_vertically([app_depth, app_inverted, app_views, target_depth])
+	preview_img.save(join(output_dir, "preview.jpg"))
+ 
+if opt.task == "preview_only" or opt.task == "invert":
+	exit(0)
+
 # Slow imports here
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, UniPCMultistepScheduler
 from diffusers.training_utils import set_seed
-from pipeline import StableSyncMVDPipeline
 from CIA.appearance_transfer_model import AppearanceTransferModel
+if opt.task == "smvd":
+    from SyncMVD.src.smvd_pipeline import StableSyncMVDPipeline
+elif opt.task == "cit":
+	from pipeline import StableSyncMVDPipeline
 
-log("Imported diffusers and CIA")
+log("Imported diffusers and pipeline")
 
 
 copy(opt.config, join(output_dir, "config.yaml"))
@@ -174,30 +190,32 @@ logging_config = {
 	"tex_fast_preview": opt.tex_fast_preview,
 	}
 
+
+# Set up the model and the pipeline
+
 if opt.cond_type == "normal":
 	# controlnet = ControlNetModel.from_pretrained("lllyasviel/control_v11p_sd15_normalbae", torch_dtype=torch.float16)
 	raise NotImplementedError("Normal controlnet is not supported yet.")
 elif opt.cond_type == "depth":
 	controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-depth", torch_dtype=torch.float16)			
-
 pipe = StableDiffusionControlNetPipeline.from_pretrained(
 	"runwayml/stable-diffusion-v1-5", controlnet=controlnet, safety_checker=None, torch_dtype=torch.float16
 )
 pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
-
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
-
-model_cfg = RunConfig(opt.prompt)
-set_seed(model_cfg.seed)
-model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
+if opt.task == "cit":
+	model_cfg = RunConfig(opt.prompt)
+	set_seed(model_cfg.seed)
+	# Modifying the attention proccesor of the pipe has a wierd semantic - it is done by initializing the model with the pipe.
+	model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
 
 log("Model is set up")
 
 
-
+assert id(syncmvd) == id(model.pipe), f"syncmvd and model.pipe should be the same object." 
 # Run the SyncMVD pipeline
-result_tex_rgb, textured_views, v = model.pipe(
+result_tex_rgb, textured_views, v = syncmvd(
 	prompt=opt.prompt,
 	height=opt.latent_view_size*8,
 	width=opt.latent_view_size*8,

@@ -10,6 +10,12 @@ def parse_config():
                         prog='Multi-View Diffusion',
                         description='Generate texture given mesh and texture prompt',
                         epilog='Refer to https://arxiv.org/abs/2311.12891 for more details')
+    # Task Config
+    parser.add_argument('--task', choices=["smvd", "cit", "cit_wo_injection", "invert", "preview_only"], default='cit', help='Choose the task to perform')
+    # Run Config
+    # parser.add_argument('--latents_save',action='store_true', help='Whether to save the reconstruction latents and condition images to the latents_save_path and cond_app_path. Aplies only when not loading latents')
+    parser.add_argument('--latents_load',action='store_true', help='Whether to load the reconstruction latents and condition images from the latents_save_path and cond_app_path. If False, or one of the paths is not found, the latents and condition images will be generated from scratch')
+    parser.add_argument('--invert_with_controlnet',action='store_true', help='Whether to perform inversion and reconstruction with controlnet')
     # File Config
     parser.add_argument('--config', type=str, required=True, is_config_file=True)
     parser.add_argument('--mesh', type=str, required=True)
@@ -22,10 +28,8 @@ def parse_config():
     parser.add_argument('--use_mesh_name', action='store_true')
     parser.add_argument('--timeformat', type=str, default='%d%b%Y-%H%M%S', help='Setting to None will not use time string in output directory')
     parser.add_argument('--latents_save_path', default="./recons.pt", type=str, help='The path from which the saved latents will be loaded')
-    parser.add_argument('--cond_app_path', default="./cond_app.pt", type=str, help='The path from which the saved condition images will be loaded')
+    parser.add_argument('--cond_app_path', default="./cond_app.pt", type=str, help='The path from which the saved condition images latents will be loaded')
     parser.add_argument('--bg_path', type=str, default="./bg.png", help='The path from which the background image will be loaded, in order to perform the inversion on a more natural bg.')
-    parser.add_argument('--latents_load',action='store_true', help='Whether to load the reconstruction latents and condition images from the latents_save_path and cond_app_path. If False, or one of the paths is not found, the latents and condition images will be generated from scratch')
-    parser.add_argument('--invert_with_controlnet',action='store_true', help='Whether to perform inversion and reconstruction with controlnet')
     # Diffusion Config
     parser.add_argument('--prompt', type=str, required=True)
     parser.add_argument('--negative_prompt', type=str, default='oversmoothed, blurry, depth of field, out of focus, low quality, bloom, glowing effect.')
@@ -59,6 +63,7 @@ def parse_config():
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--view_fast_preview', action='store_true', help='Use color transformation matrix instead of decoder to log view images')
     parser.add_argument('--tex_fast_preview', action='store_true', help='Use color transformation matrix instead of decoder to log texture images')
+    parser.add_argument('--preview', action='store_true', help='saves a preview of the objects', default=True)
     options = parser.parse_args()
 
     return options
