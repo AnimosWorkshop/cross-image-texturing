@@ -1,17 +1,11 @@
 from datetime import datetime
 import numpy as np
-from diffusers.utils import numpy_to_pil, randn_tensor
+from diffusers.utils import numpy_to_pil
 import torch
-from SyncMVD.src.utils import decode_latents, get_rgb_texture
-from CIA.appearance_transfer_model import AppearanceTransferModel
 from PIL import Image
-from cit_configs import RunConfig
-from CIA.utils.ddpm_inversion import invert
 
+lidor_dir = "results/lidor"
 
-##################################
-######### CIT_utils.py ###########
-##################################
 
 # A fast decoding method based on linear projection of latents to rgb
 @torch.no_grad()
@@ -31,17 +25,21 @@ def latent_preview(x):
 	image = image.numpy()
 	return image
 
- 
-###############################
-##### copy to DBG console #####
-###############################
+def concat_images_vertically(images):
+    # Get total height and maximum width
+	total_height = sum(img.height for img in images)
+	max_width = max(img.width for img in images)
 
-from datetime import datetime
-import numpy as np
-from diffusers.utils import numpy_to_pil
-from SyncMVD.src.utils import decode_latents
+	# Create a new blank image with the right size
+	concatenated_img = Image.new("RGB", (max_width, total_height))
 
-lidor_dir = "results/lidor"
+	# Paste images on top of each other
+	y_offset = 0
+	for img in images:
+		concatenated_img.paste(img, (0, y_offset))
+		y_offset += img.height
+
+	return concatenated_img
 
 def concat_images_horizontally(images):
     # Get total width and maximum height
@@ -65,7 +63,7 @@ def image_to_tensor(image):
 def tensor_to_image(tensor):
     return Image.fromarray((tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
 
-def show_views(views, dest_dir=lidor_dir): # Working!
+def show_views(views, dest_dir=lidor_dir): # Deprecated, can't remember what it does
 	result_images = []
 	for view in views:
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
@@ -95,13 +93,6 @@ def show_latents(latents, dest_dir=lidor_dir):
 	elif (len(latents.shape) == 4):
 		latents = latents.unsqueeze(0)
 
-	# latents = latents.to(torch.float16).to("cuda:0")
-	# decoded_latents = latent_preview(latents)
-	# concatenated_image = np.concatenate(decoded_latents, axis=1)
-	# numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
- 
-	# if len(latents.shape) != 5:
-	# 	return
 	views = []
 	for view in latents:
 		view = view.to(torch.float16).to("cuda:0")
@@ -110,5 +101,3 @@ def show_latents(latents, dest_dir=lidor_dir):
 		views.append(concatenated_image)
 	concatenated_image = np.concatenate(views, axis=0)
 	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
- 
-		
