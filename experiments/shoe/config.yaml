@@ -4,7 +4,8 @@ tex_app: "./blue.jpg"
 mtl_app: "./blue.mtl"
 mesh_config_relative: True    # mesh is placed relative to the config file
 use_mesh_name: False
-prompt: "a blue shoe with white soles and a blue logo."
+# prompt: "a blue shoe with white soles and a blue logo."
+prompt: "a shoe."
 steps: 100
 cond_type: "depth"
 seed: 1

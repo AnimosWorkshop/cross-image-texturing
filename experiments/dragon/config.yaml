@@ -4,7 +4,7 @@ tex_app: "./purple.png"
 mtl_app: "./purple.mtl"
 mesh_config_relative: True    # mesh is placed relative to the config file
 use_mesh_name: False
-prompt: "A small purple dragon."
+prompt: "A dragon."
 steps: 100
 cond_type: "depth"
 seed: 1
