@@ -4,7 +4,7 @@ from diffusers.utils import numpy_to_pil
 import torch
 from PIL import Image
 
-lidor_dir = "results/lidor"
+lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/new_semester/cross-image-texturing/results/lidor"
 
 
 # A fast decoding method based on linear projection of latents to rgb
@@ -63,25 +63,39 @@ def image_to_tensor(image):
 def tensor_to_image(tensor):
     return Image.fromarray((tensor.permute(1, 2, 0).cpu().numpy() * 255).astype(np.uint8))
 
-def show_views(views, dest_dir=lidor_dir): # Deprecated, can't remember what it does
+def show_views(views, dest_dir=lidor_dir, save=True): # Deprecated, can't remember what it does
 	result_images = []
 	for view in views:
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
 		print(rgb_image, rgb_image.shape)
 		result_images.append(rgb_image)
 	concatenated_image = np.concatenate(result_images, axis=1)
-	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_views_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+	res_image = numpy_to_pil(concatenated_image)[0]
+	if save:
+		res_image.save(f"{dest_dir}/show_views_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+	return res_image
  
 def save_all_views(views, dest_dir=lidor_dir):
 	for i, view in enumerate(views):
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
 		numpy_to_pil(rgb_image)[0].save(f"{dest_dir}/face_view_{i}.jpg")
  
-def show_mesh(uvp, dest_dir=lidor_dir):
+def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None):
+	"""uvp can be a path to a saved model or a UVP object."""
+	if type(uvp) == str:
+		from project import build_uvp
+		# if not texture:
+		# 	texture = Image.new("RGB", (1024, 1024), "white")
+		uvp = build_uvp(uvp, texture)
+	device = uvp.device
+  
+	uvp.to("cuda:0")
 	views = uvp.render_textured_views()
-	show_views(views, dest_dir)
+	uvp.to(device)
+
+	return show_views(views, dest_dir, save)
  
-def show_latents(latents, dest_dir=lidor_dir):
+def show_latents(latents, dest_dir=lidor_dir, save=True):
 	"""
 	Latents can be a tensor of shape (N, L) or (L,), or path.
 	"""
@@ -100,4 +114,7 @@ def show_latents(latents, dest_dir=lidor_dir):
 		concatenated_image = np.concatenate(decoded_latents, axis=1)
 		views.append(concatenated_image)
 	concatenated_image = np.concatenate(views, axis=0)
-	numpy_to_pil(concatenated_image)[0].save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+	res_image = numpy_to_pil(concatenated_image)[0]
+	if save:
+		res_image.save(f"{dest_dir}/show_latent_at{datetime.now().strftime('%d%b%Y-%H%M%S')}.jpg")
+	return res_image

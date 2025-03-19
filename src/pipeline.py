@@ -37,6 +37,7 @@ from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from project import UVProjection as UVP
+from project import default_cameras
 
 
 from SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
@@ -214,49 +215,42 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		# 1. Initialize camera positions
 		# Define the cameras for rendering
-		self.camera_poses = []
-		self.attention_mask=[]
 		self.centers = camera_centers
+  
+		# self.camera_poses = []
+		# self.attention_mask=[]
 
-		cam_count = len(camera_azims)
-		front_view_diff = 360
-		back_view_diff = 360
-		front_view_idx = 0
-		back_view_idx = 0
-		for i, azim in enumerate(camera_azims):
-			if azim < 0:
-				azim += 360
-			self.camera_poses.append((0, azim))
-			self.attention_mask.append([(cam_count+i-1)%cam_count, i, (i+1)%cam_count])
-			if abs(azim) < front_view_diff:
-				front_view_idx = i
-				front_view_diff = abs(azim)
-			if abs(azim - 180) < back_view_diff:
-				back_view_idx = i
-				back_view_diff = abs(azim - 180)
+		# cam_count = len(camera_azims)
+		# front_view_diff = 360
+		# back_view_diff = 360
+		# front_view_idx = 0
+		# back_view_idx = 0
+		# for i, azim in enumerate(camera_azims):
+		# 	if azim < 0:
+		# 		azim += 360
+		# 	self.camera_poses.append((0, azim))
+		# 	self.attention_mask.append([(cam_count+i-1)%cam_count, i, (i+1)%cam_count])
+		# 	if abs(azim) < front_view_diff:
+		# 		front_view_idx = i
+		# 		front_view_diff = abs(azim)
+		# 	if abs(azim - 180) < back_view_diff:
+		# 		back_view_idx = i
+		# 		back_view_diff = abs(azim - 180)
 
-		# Add two additional cameras for painting the top surfaces
-		if top_cameras:
-			self.camera_poses.append((30, 0))
-			self.camera_poses.append((30, 180))
+		# # Add two additional cameras for painting the top surfaces
+		# if top_cameras:
+		# 	self.camera_poses.append((30, 0))
+		# 	self.camera_poses.append((30, 180))
 
-			self.attention_mask.append([front_view_idx, cam_count])
-			self.attention_mask.append([back_view_idx, cam_count+1])
-
-		# TODO: check that self.attention_mask doesn't screw us up
-
-		# Reference view for attention (all views attend the the views in this list)
-		# A forward view will be used if not specified
-		if len(ref_views) == 0:
-			ref_views = [front_view_idx]
-
-		# Calculate in-group attention mask
-		# self.group_metas = split_groups(self.attention_mask, max_batch_size, ref_views)
-		
+		# 	self.attention_mask.append([front_view_idx, cam_count])
+		# 	self.attention_mask.append([back_view_idx, cam_count+1])
+		self.camera_poses, self.attention_mask = default_cameras()
+  
 
 		# 2. Set up the UV mappings
 		# Set up pytorch3D for projection between screen space and UV space
 		# uvp is for latent and uvp_rgb for rgb color
+		#LIDOR TODO
 		self.uvp = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
 		if mesh_path.lower().endswith(".obj"):
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
