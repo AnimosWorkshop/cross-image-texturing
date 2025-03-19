@@ -45,7 +45,8 @@ from SyncMVD.src.utils import *
 
 from CIA.appearance_transfer_model import AppearanceTransferModel
 from cit_configs import Range, RunConfig
-from cit_utils import show_latents, step_tex, show_views, save_all_views
+from cit_utils import show_latents, show_views, save_all_views
+from cit_step import step_tex
 
 from datetime import datetime
 
