@@ -22,3 +22,4 @@ cond_app_path: "./cond_app.pt"
 task: "preview_only"
 preview: True
 # preview: False
+do_cit_injection: False

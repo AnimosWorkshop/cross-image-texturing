@@ -204,7 +204,7 @@ pipe = StableDiffusionControlNetPipeline.from_pretrained(
 pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 syncmvd = StableSyncMVDPipeline(**pipe.components)
 
-if opt.task == "cit":
+if opt.do_cit_injection:
 	model_cfg = RunConfig(opt.prompt)
 	set_seed(model_cfg.seed)
 	# Modifying the attention proccesor of the pipe has a wierd semantic - it is done by initializing the model with the pipe.
@@ -264,5 +264,3 @@ result_tex_rgb, textured_views, v = syncmvd(
 
 	app_transfer_model=model,
 	)
-
-display(v) # what is v?

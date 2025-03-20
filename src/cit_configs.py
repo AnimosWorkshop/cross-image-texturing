@@ -11,11 +11,11 @@ def parse_config():
                         description='Generate texture given mesh and texture prompt',
                         epilog='Refer to https://arxiv.org/abs/2311.12891 for more details')
     # Task Config
-    parser.add_argument('--task', choices=["smvd", "cit", "cit_wo_injection", "invert", "preview_only"], default='cit', help='Choose the task to perform')
-    # Run Config
-    # parser.add_argument('--latents_save',action='store_true', help='Whether to save the reconstruction latents and condition images to the latents_save_path and cond_app_path. Aplies only when not loading latents')
-    parser.add_argument('--latents_load',action='store_true', help='Whether to load the reconstruction latents and condition images from the latents_save_path and cond_app_path. If False, or one of the paths is not found, the latents and condition images will be generated from scratch')
+    parser.add_argument('--task', choices=["smvd", "cit", "invert", "preview_only"], default='cit', help='Choose the task to perform')
+    parser.add_argument('--do_cit_injection',action='store_true', default=False, help='Whether to perform inversion and reconstruction with controlnet')
     parser.add_argument('--invert_with_controlnet',action='store_true', help='Whether to perform inversion and reconstruction with controlnet')
+    # Run Config
+    parser.add_argument('--latents_load',action='store_true', help='Whether to load the reconstruction latents and condition images from the latents_save_path and cond_app_path. If False, or one of the paths is not found, the latents and condition images will be generated from scratch')
     # File Config
     parser.add_argument('--config', type=str, required=True, is_config_file=True)
     parser.add_argument('--mesh', type=str, required=True)
