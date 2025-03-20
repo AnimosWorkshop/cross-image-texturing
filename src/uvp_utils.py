@@ -177,6 +177,7 @@ def build_uvp(mesh_path, texture=None, texture_size=1024, render_size=512, sampl
 	uvp = UVP(texture_size=texture_size, render_size=render_size, sampling_mode=sampling_mode, channels=channels, device=device)
 	extension = get_extension(mesh_path)
 	if extension == ".obj":
+		# raise ValueError(f"Unsupported mesh file extension: {extension}") 
 		uvp.load_mesh(mesh_path, scale_factor=True, autouv=False)
 	elif extension == ".glb":
 		uvp.load_glb_mesh(mesh_path, scale_factor=True, autouv=False)

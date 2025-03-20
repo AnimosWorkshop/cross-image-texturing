@@ -200,19 +200,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		# 2. Set up the UV mappings
 		# Set up pytorch3D for projection between screen space and UV space
 		# uvp is for latent and uvp_rgb for rgb color
-		#LIDOR TODO
-# 		self.uvp = UVP(texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
-# 		if mesh_path.lower().endswith(".obj"):
-# 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
-# 		elif mesh_path.lower().endswith(".glb"):
-# 			# mesh_autouv=False
-#    #TODO change to load_glb_mesh, or directly to build_uvp
-# 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
-# 		else:
-# 			assert False, "The mesh file format is not supported. Use .obj or .glb."
-
-# 		self.uvp.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)
-
 		self.uvp = build_uvp(mesh_path, texture_size=texture_size, render_size=latent_size, sampling_mode="nearest", channels=4, device=self._execution_device)
 
 

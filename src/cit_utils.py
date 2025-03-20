@@ -115,7 +115,7 @@ def show_latents(latents, dest_dir=lidor_dir, save=True):
 
 	views = []
 	for view in latents:
-		view = view.to(torch.float16).to("cuda:0")
+		view = view.to(torch.float16).to("cpu")
 		decoded_latents = latent_preview(view)
 		concatenated_image = np.concatenate(decoded_latents, axis=1)
 		views.append(concatenated_image)

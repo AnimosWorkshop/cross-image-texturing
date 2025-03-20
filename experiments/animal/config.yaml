@@ -2,12 +2,13 @@ prompt: "an animal."
 # prompt: "a stuffed tiger with blue eyes and a white background."
 steps: 10
 do_cit_injection: False
+# task: "preview_only"
 task: "smvd"
-preview: False
+preview: True
 latents_load: True
 
 mesh: "./dog.glb"
-mesh_app: "./tiger.obj"
+mesh_app: "./tiger.glb"
 tex_app: "./tiger_texture.jpg"
 mtl_app: "./tiger.mtl"
 mesh_config_relative: True    # mesh is placed relative to the config file

@@ -209,11 +209,11 @@ if opt.do_cit_injection:
 	set_seed(model_cfg.seed)
 	# Modifying the attention proccesor of the pipe has a wierd semantic - it is done by initializing the model with the pipe.
 	model = AppearanceTransferModel(model_cfg, pipe=syncmvd)
+	assert id(syncmvd) == id(model.pipe), f"syncmvd and model.pipe should be the same object." 
 
 log("Model is set up")
 
 
-assert id(syncmvd) == id(model.pipe), f"syncmvd and model.pipe should be the same object." 
 # Run the SyncMVD pipeline
 result_tex_rgb, textured_views, v = syncmvd(
 	prompt=opt.prompt,
