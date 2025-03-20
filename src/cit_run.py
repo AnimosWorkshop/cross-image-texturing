@@ -172,7 +172,7 @@ from diffusers import DDPMScheduler, UniPCMultistepScheduler
 from diffusers.training_utils import set_seed
 from CIA.appearance_transfer_model import AppearanceTransferModel
 if opt.task == "smvd":
-    from SyncMVD.src.smvd_pipeline import StableSyncMVDPipeline
+    from SyncMVD.src.pipeline import StableSyncMVDPipeline
 elif opt.task == "cit":
 	from pipeline import StableSyncMVDPipeline
 
