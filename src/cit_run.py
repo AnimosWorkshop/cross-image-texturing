@@ -242,7 +242,6 @@ result_tex_rgb, textured_views, v = syncmvd(
 	mesh_transform_app={"scale":opt.mesh_scale},
 	mesh_autouv_app=not opt.keep_mesh_uv,
 	
-	latents_load=True,
 	latents_save_path=latents_save_path,
 	cond_app_path=cond_app_path,
 
