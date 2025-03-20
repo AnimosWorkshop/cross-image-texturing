@@ -42,6 +42,8 @@ def concat_images_vertically(images):
 	return concatenated_img
 
 def concat_images_horizontally(images):
+    if type(images) == torch.Tensor:
+        images = [tensor_to_image(img) for img in images]
     # Get total width and maximum height
     total_width = sum(img.width for img in images)
     max_height = max(img.height for img in images)
@@ -80,8 +82,12 @@ def save_all_views(views, dest_dir=lidor_dir):
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
 		numpy_to_pil(rgb_image)[0].save(f"{dest_dir}/face_view_{i}.jpg")
  
-def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None):
+def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None): #TODO what if the mesh is rendered in latent space?
 	"""uvp can be a path to a saved model or a UVP object."""
+
+	print(uvp)
+	print(texture)
+
 	if type(uvp) == str:
 		from project import build_uvp
 		# if not texture:

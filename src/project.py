@@ -524,23 +524,26 @@ def default_cameras():
 	return camera_poses, attention_mask
 	
 
-def build_uvp(mesh_path, texture=None, texture_size=1024, render_size=512, sampling_mode="nearest", channels=3, device="cuda", camera_poses=None, camera_centers=None, mesh_transform={"scale":1}, mesh_autouv=False):
+def build_uvp(mesh_path, texture=None, texture_size=1024, render_size=512, sampling_mode="nearest", channels=3, device="cuda", camera_poses=None, camera_centers=None, mesh_transform={"scale":1}):
 	uvp = UVProjection(texture_size=texture_size, render_size=render_size, sampling_mode=sampling_mode, channels=channels, device=device)
 	if mesh_path.lower().endswith(".obj"):
-		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=False)
 	elif mesh_path.lower().endswith(".glb"):
 		# mesh_autouv=False
-		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
+		uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=False)
 	else:
 		assert False, "The mesh file format is not supported. Use .obj or .glb."
 
+	if texture:
+		texture_image = Image.open(texture) if type(texture) == str else texture
+		print(texture_image.mode)
+		texture_image.convert("RGB")
+		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
+		print(texture_tensor.shape)
+		uvp.set_texture_map(texture_tensor)
+ 
 	if camera_poses is None:
 		camera_poses, _ = default_cameras()
 	uvp.set_cameras_and_render_settings(camera_poses, centers=camera_centers, camera_distance=4.0)
- 
-	if texture:
-		texture_image = Image.open(texture) if type(texture) == str else texture
-		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
-		uvp.set_texture_map(texture_tensor)
- 
+
 	return uvp

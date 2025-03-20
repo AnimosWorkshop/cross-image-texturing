@@ -256,6 +256,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		elif mesh_path.lower().endswith(".glb"):
 			# mesh_autouv=False
+   #TODO change to load_glb_mesh, or directly to build_uvp
 			self.uvp.load_mesh(mesh_path, scale_factor=mesh_transform["scale"] or 1, autouv=mesh_autouv)
 		else:
 			assert False, "The mesh file format is not supported. Use .obj or .glb."
@@ -285,7 +286,6 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 			
 			texture_image = Image.open(tex_app_path)
 			texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
-			# texture_tensor = (torch.from_numpy(np.array(texture_image)).to(torch.float16) / 255.0).permute(2, 0, 1)
 			self.uvp_app.set_texture_map(texture_tensor)
 			
 			self.uvp_app.set_cameras_and_render_settings(self.camera_poses, centers=camera_centers, camera_distance=4.0)

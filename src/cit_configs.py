@@ -63,7 +63,7 @@ def parse_config():
     parser.add_argument('--log_interval', type=int, default=10)
     parser.add_argument('--view_fast_preview', action='store_true', help='Use color transformation matrix instead of decoder to log view images')
     parser.add_argument('--tex_fast_preview', action='store_true', help='Use color transformation matrix instead of decoder to log texture images')
-    parser.add_argument('--preview', action='store_true', help='saves a preview of the objects', default=True)
+    parser.add_argument('--preview', action='store_true', help='saves a preview of the objects', default=False)
     options = parser.parse_args()
 
     return options

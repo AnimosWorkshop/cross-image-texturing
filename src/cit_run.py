@@ -155,10 +155,10 @@ else:
 
 
 if opt.preview:
-	from cit_utils import show_latents, concat_images_vertically, show_mesh
-	app_depth = show_latents(cond_app_path, output_dir, save=False)
+	from cit_utils import show_latents, concat_images_vertically, concat_images_horizontally, show_mesh
+	app_depth = concat_images_horizontally(torch.load(cond_app_path))
 	app_inverted = show_latents(latents_save_path, output_dir, save=False)
-	app_views = show_mesh(latents_save_path, output_dir, save=False, texture=tex_app)
+	app_views = show_mesh(mesh_path_app, output_dir, save=False, texture=tex_app)
 	target_depth = show_mesh(mesh_path, output_dir, save=False)
 	preview_img = concat_images_vertically([app_depth, app_inverted, app_views, target_depth])
 	preview_img.save(join(output_dir, "preview.jpg"))

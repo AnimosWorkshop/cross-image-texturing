@@ -1,5 +1,5 @@
-mesh: "./dog.obj"
-mesh_app: "./tiger.glb"
+mesh: "./dog.glb"
+mesh_app: "./tiger.obj"
 tex_app: "./tiger_texture.jpg"
 mtl_app: "./tiger.mtl"
 mesh_config_relative: True    # mesh is placed relative to the config file
@@ -19,3 +19,6 @@ invert_with_controlnet: True
 bg_path: "./bg.png"
 latents_save_path: "./recons.pt"
 cond_app_path: "./cond_app.pt"
+task: "preview_only"
+preview: True
+# preview: False
