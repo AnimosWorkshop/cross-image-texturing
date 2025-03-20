@@ -52,7 +52,7 @@ def save_list_of_images(base_name:str, image_list:List[Image.Image], output_dir:
 def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_path=None, invert_with_controlnet=True, cond_type="depth", camera_azims=None):
 	"""Inverts the appearance of the object and saves the views and depth conditioning images."""
 	from cit_utils import tensor_to_image, concat_images_horizontally
-	from cit_invert import get_views_and_depth
+	from uvp_utils import get_views_and_depth
 	from argparse import Namespace
 	if invert_with_controlnet:
 		from inversion_with_controlnet import run

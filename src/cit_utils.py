@@ -89,7 +89,7 @@ def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None): #TODO what if t
 	print(texture)
 
 	if type(uvp) == str:
-		from project import build_uvp
+		from uvp_utils import build_uvp
 		# if not texture:
 		# 	texture = Image.new("RGB", (1024, 1024), "white")
 		uvp = build_uvp(uvp, texture)

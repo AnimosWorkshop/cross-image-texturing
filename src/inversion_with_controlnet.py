@@ -4,7 +4,7 @@ import psutil
 from transformers import CLIPTextModel, CLIPTokenizer, logging
 from diffusers import AutoencoderKL, UNet2DConditionModel, DDIMScheduler, ControlNetModel
 
-from cit_invert import reshape_latents
+from uvp_utils import reshape_latents
 
 # suppress partial model loading warning
 logging.set_verbosity_error()

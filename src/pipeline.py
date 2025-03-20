@@ -10,7 +10,6 @@ import psutil
 import copy
 from torch import functional as F
 from torch import nn
-from torchvision.transforms import Compose, Resize, GaussianBlur, InterpolationMode
 from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
 from diffusers import DDPMScheduler, DDIMScheduler, UniPCMultistepScheduler
 from diffusers.models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
@@ -37,7 +36,7 @@ from diffusers.training_utils import set_seed
 
 from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from project import UVProjection as UVP
-from project import default_cameras, build_uvp
+from uvp_utils import build_uvp, default_cameras, get_conditioning_images
 
 
 from SyncMVD.src.syncmvd.attention import SamplewiseAttnProcessor2_0, replace_attention_processors
@@ -67,27 +66,7 @@ color_constants = {"black": [-1, -1, -1], "white": [1, 1, 1], "maroon": [0, -1, 
 color_names = list(color_constants.keys())
 
 
-# Used to generate depth or normal conditioning images
-@torch.no_grad()
-def get_conditioning_images(uvp, output_size, render_size=512, blur_filter=5, cond_type="normal"):
-	verts, normals, depths, cos_maps, texels, fragments = uvp.render_geometry(image_size=render_size)
-	masks = normals[...,3][:,None,...]
-	masks = Resize((output_size//8,)*2, antialias=True)(masks)
-	normals_transforms = Compose([
-		Resize((output_size,)*2, interpolation=InterpolationMode.BILINEAR, antialias=True), 
-		GaussianBlur(blur_filter, blur_filter//3+1)]
-	)
 
-	if cond_type == "normal":
-		view_normals = uvp.decode_view_normal(normals).permute(0,3,1,2) *2 - 1
-		conditional_images = normals_transforms(view_normals)
-	# Some problem here, depth controlnet don't work when depth is normalized
-	# But it do generate using the unnormalized form as below
-	elif cond_type == "depth":
-		view_depths = uvp.decode_normalized_depth(depths).permute(0,3,1,2)
-		conditional_images = normals_transforms(view_depths)
-	
-	return conditional_images, masks
 
 
 # Revert time 0 background to time t to composite with time t foreground
