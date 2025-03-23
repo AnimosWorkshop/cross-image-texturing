@@ -6,6 +6,10 @@ from PIL import Image
 
 lidor_dir = "/home/ML_courses/03683533_2024/lidor_yael_snir/new_semester/cross-image-texturing/results/lidor"
 
+def get_gpu_copy(tensor):
+	"""Returns a copy of the tensor on the GPU.
+	unused now, but might use it later."""
+	return tensor.to("cuda:0", dtype=torch.float16)
 
 # A fast decoding method based on linear projection of latents to rgb
 @torch.no_grad()
@@ -18,7 +22,7 @@ def latent_preview(x):
 		[-0.158, 0.189, 0.264],  # L3
 		[-0.184, -0.271, -0.473],  # L4
 	], dtype=x.dtype, device=x.device)
-	image = x.permute(0, 2, 3, 1) @ v1_4_latent_rgb_factors
+	image = x.permute(0, 2, 3, 1).to("cuda:0", dtype=torch.float16) @ v1_4_latent_rgb_factors.to("cuda:0", dtype=torch.float16)
 	image = (image / 2 + 0.5).clamp(0, 1)
 	image = image.float()
 	image = image.cpu()
@@ -69,7 +73,6 @@ def show_views(views, dest_dir=lidor_dir, save=True): # Deprecated, can't rememb
 	result_images = []
 	for view in views:
 		rgb_image = view[:3].permute(1, 2, 0).cpu().numpy() # Shape: (H, W, 3)
-		print(rgb_image, rgb_image.shape)
 		result_images.append(rgb_image)
 	concatenated_image = np.concatenate(result_images, axis=1)
 	res_image = numpy_to_pil(concatenated_image)[0]
@@ -85,9 +88,6 @@ def save_all_views(views, dest_dir=lidor_dir):
 def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None): #TODO what if the mesh is rendered in latent space?
 	"""uvp can be a path to a saved model or a UVP object."""
 
-	print(uvp)
-	print(texture)
-
 	if type(uvp) == str:
 		from uvp_utils import build_uvp
 		# if not texture:
@@ -101,13 +101,19 @@ def show_mesh(uvp, dest_dir=lidor_dir, save=True, texture=None): #TODO what if t
 
 	return show_views(views, dest_dir, save)
  
-def show_latents(latents, dest_dir=lidor_dir, save=True):
+def show_latents(latents, dest_dir=lidor_dir, save=True, only_last=False):
 	"""
 	Latents can be a tensor of shape (N, L) or (L,), or path.
 	"""
 	if isinstance(latents, str):
 		latents = torch.load(latents)
  
+	if (len(latents.shape) == 3):
+		latents = latents.unsqueeze(0)
+  
+	if only_last:
+		latents = latents[-1]
+  
 	if (len(latents.shape) == 3):
 		latents = latents.unsqueeze(0).unsqueeze(0)
 	elif (len(latents.shape) == 4):

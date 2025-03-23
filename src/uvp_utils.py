@@ -187,10 +187,8 @@ def build_uvp(mesh_path, texture=None, texture_size=1024, render_size=512, sampl
 
 	if texture:
 		texture_image = Image.open(texture) if type(texture) == str else texture
-		print(texture_image.mode)
 		texture_image = texture_image.convert("RGB")
 		texture_tensor = (torch.from_numpy(np.array(texture_image)) / 255.0).permute(2, 0, 1)
-		print(texture_tensor.shape)
 		uvp.set_texture_map(texture_tensor)
  
 	if camera_poses is None:

@@ -263,7 +263,7 @@ def run(opt : argparse.Namespace):
     control_images_path = sorted(glob.glob(os.path.join(opt.control_image_path, '*')))
 
     os.makedirs(opt.save_dir, exist_ok=True)
-    print(images_path)
+    # print(images_path)
 
     recons = []
     model = Preprocess(device, sd_version=opt.sd_version, hf_key=None, lora_weights_path=opt.lora_weights_path)

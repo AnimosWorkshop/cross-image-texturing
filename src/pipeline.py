@@ -293,9 +293,7 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 		ref_attention_end=0.2,
 
 		logging_config=None,
-		cond_type="depth",
-
-		app_transfer_model=None,
+		cond_type="depth"
 	):
 		if (not os.path.isfile(latents_save_path)) or (not os.path.isfile(cond_app_path)):  
 			print(f"{latents_save_path = }")

@@ -7,6 +7,8 @@ def log(msg: str):
     minutes, seconds = divmod(elapsed_time.total_seconds(), 60)
     print(f"{datetime.now().strftime('%d%b%Y-%H%M%S')} (+{int(minutes)}m{int(seconds)}s) cit_run: {msg}")
 
+log("Starting script")
+
 import torch
 log("imported torch")
 
@@ -22,10 +24,17 @@ from datetime import datetime
 from shutil import copy
 from PIL import Image
 
+log("imported other modules")
+
 # This part is copied from SyncMVD/run_experiment.py and prepares the pipeline.
 # Need to make sure that the pipe receives the two meshes and appearance texture instead of only one mesh.
 # 'app' is a shortcut for 'appearance'
 
+def resize_to_width(img, width):
+    """Resizes an image to the given width while maintaining aspect ratio."""
+    w, h = img.size
+    new_height = int(h * (width / w))
+    return img.resize((width, new_height))
 
 def make_dirs_for_app_proccessing(output_dir):
 	inversion_dir = join(output_dir, "inversion")
@@ -62,7 +71,7 @@ def prepare_appearance(prompt, steps, tex_app, mesh_app, output_dir, seed, bg_pa
  
 	inversion_dir, cond_dir, data_dir = make_dirs_for_app_proccessing(output_dir)
 	cond_app_path = join(cond_dir, "cond_app.pt")
- 
+
 	print(f"Saving appearance views to {data_dir}")
 	print(f"Saving appearance conditioning images to {cond_dir}")
 	print(f"Saving inverted appearance latents to {inversion_dir}")
@@ -156,12 +165,18 @@ else:
 
 if opt.preview:
 	from cit_utils import show_latents, concat_images_vertically, concat_images_horizontally, show_mesh
+	log("imported from cit_utils")
 	app_depth = concat_images_horizontally(torch.load(cond_app_path))
-	app_inverted = show_latents(latents_save_path, output_dir, save=False)
+	log("Loaded app_depth")
+	app_inverted = resize_to_width(show_latents(latents_save_path, output_dir, save=False, only_last=True), app_depth.width)
+	log("Loaded app_inverted")
 	app_views = show_mesh(mesh_path_app, output_dir, save=False, texture=tex_app)
+	log("Loaded app_views")
 	target_depth = show_mesh(mesh_path, output_dir, save=False)
+	log("Loaded target_depth")
 	preview_img = concat_images_vertically([app_depth, app_inverted, app_views, target_depth])
 	preview_img.save(join(output_dir, "preview.jpg"))
+	log("Saved preview image.")
  
 if opt.task == "preview_only" or opt.task == "invert":
 	exit(0)
@@ -260,6 +275,6 @@ result_tex_rgb, textured_views, v = syncmvd(
 
 	logging_config=logging_config,
 	cond_type=opt.cond_type,
-
-	app_transfer_model=model,
 	)
+
+log("SyncMVD pipeline is done running")
