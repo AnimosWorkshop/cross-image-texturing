@@ -251,15 +251,6 @@ result_tex_rgb, textured_views, v = syncmvd(
 	mesh_path=mesh_path,
 	mesh_transform={"scale":opt.mesh_scale},
 	mesh_autouv=not opt.keep_mesh_uv,
-	tex_app_path=tex_app,	
- 
-    mesh_path_app=mesh_path_app,
-	mesh_transform_app={"scale":opt.mesh_scale},
-	mesh_autouv_app=not opt.keep_mesh_uv,
-	
-	latents_save_path=latents_save_path,
-	cond_app_path=cond_app_path,
-
 
 	camera_azims=opt.camera_azims,
 	top_cameras=not opt.no_top_cameras,
@@ -275,6 +266,14 @@ result_tex_rgb, textured_views, v = syncmvd(
 
 	logging_config=logging_config,
 	cond_type=opt.cond_type,
+ 
+	# CIT arguments
+	tex_app_path=tex_app,	
+	mesh_path_app=mesh_path_app,
+	mesh_transform_app={"scale":opt.mesh_scale},
+	mesh_autouv_app=not opt.keep_mesh_uv,
+	latents_save_path=latents_save_path,
+	cond_app_path=cond_app_path,
 	)
 
 log("SyncMVD pipeline is done running")

@@ -4,6 +4,7 @@ steps: 10
 do_cit_injection: False
 # task: "preview_only"
 task: "smvd"
+# task: "cit"
 preview: True
 latents_load: True
 

@@ -330,6 +330,14 @@ class StableSyncMVDPipeline(StableDiffusionControlNetPipeline):
 
 		logging_config=None,
 		cond_type="depth",
+
+		# CIT arguments for compatabilty with the call in cit_run.py (Ignored)
+		tex_app_path=None,
+		mesh_path_app=None,
+		mesh_transform_app=None,
+		mesh_autouv_app=None,
+		latents_save_path=None,
+		cond_app_path=None,
 	):
 		
 
